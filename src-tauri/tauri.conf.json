@@ -43,6 +43,9 @@
   "bundle": {
     "active": true,
     "targets": ["nsis", "msi"],
+    "publisher": "Donnie Chu",
+    "copyright": "Copyright (c) 2026 Donnie Chu. All rights reserved.",
+    "category": "Utility",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -50,6 +53,12 @@
       "icons/icon.ico"
     ],
     "shortDescription": "Local Hybrid VPN Proxy Hub for Surfshark & GoLogin on Windows",
-    "longDescription": "Turns Surfshark VPN into local SOCKS5/HTTP proxy endpoints and syncs them to GoLogin profiles."
+    "longDescription": "Turns Surfshark VPN into local SOCKS5/HTTP proxy endpoints and syncs them to GoLogin profiles.",
+    "windows": {
+      "nsis": {
+        "compression": "none",
+        "installMode": "currentUser"
+      }
+    }
   }
 }
