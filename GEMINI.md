@@ -4,10 +4,10 @@
 A Tauri 2 tray-first app that turns Surfshark VPN into local SOCKS5/HTTP proxy endpoints (`127.0.0.1:<port>`) and syncs them to GoLogin profiles. Supports both binding to Surfshark's active Windows adapter and spawning parallel userspace WireGuard proxies from Surfshark's 180 local server entries (`general_locations.dat`/`static_locations.dat`). A bug costs an IP/DNS leak to the host ISP (`VNPT`) on a GoLogin browser profile, broken profile proxy assignment, or leaked credentials. Implementation rules are in `AGENTS.md`.
 
 ## Verify
-- Unit: `cargo test --manifest-path src-tauri/Cargo.toml` (not run: scaffold pending plan approval)
-- Lint: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` (not run: scaffold pending)
-- Frontend: `npm run build` (not run: scaffold pending)
-- Package: `npm run tauri build` (not run: scaffold pending)
+- Unit: `cargo test --manifest-path src-tauri/Cargo.toml`
+- Lint: `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` (0 warnings)
+- Frontend: `npm run build`
+- Package: `npm run tauri build`, required after changing `tauri.conf.json`, capabilities, icons or `Cargo.toml`
 - Owner-only on real Windows hardware: live Surfshark adapter egress check, multi-tunnel WireGuard handshake with owner PrivateKey, GoLogin profile launch & browser IP/DNS check (`ipinfo.io`/`whoer.net`), tray close/quit lifecycle.
 
 ## Model Economy (Gemini Coding 5.5)

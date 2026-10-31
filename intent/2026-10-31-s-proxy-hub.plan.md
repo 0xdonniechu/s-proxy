@@ -97,3 +97,17 @@ Tracker: Plane project `SProxy` (`SPX`, ID `f2399cf3-c3eb-4f1f-a575-d42af01f17d3
 4. Kiểm tra rò rỉ bí mật: `git grep -iE "PrivateKey\s*=|gl_eyJ|Bearer eyJ"` — **0 hits**.
 5. Independent Review (`hard-reviewer` / `reviewer` subagent) kiểm tra toàn bộ diff đối chiếu với `intent` + `plan` — **PASS**.
 6. Các kiểm thử `Owner-only` (ghi rõ trạng thái trong báo cáo cuối): bật Surfshark thật trên máy, nhập WireGuard `PrivateKey` & `GoLogin Token` của owner, mở profile GoLogin kiểm tra trên `ipinfo.io` / `whoer.net`.
+
+---
+
+## Review Log (Coding 5.5 Loop)
+
+- **`hard-reviewer` (`Gemini 3.1 Pro Preview`) trên cụm HARD (`settings.rs`, `proxy_engine.rs`, `wireguard.rs`, `gologin.rs`, `lib.rs`, `main.rs`)**:
+  - Round 1: `FAIL` (1 BLOCKER case mismatch `bytes_Transferred` vs `bytes_transferred`, 2 MAJOR: hàm dư `handle_socks5_client` và dọn file `runtime/wg-*.conf` tồn đọng sau crash khi khởi động app, 1 MINOR đồng bộ tên command `refresh_system_state`).
+  - Round 2: Đã sửa toàn bộ (thêm `cleanup_stale_runtime_configs()` ngay trong `HubCore::new()`) → **`PASS`**.
+- **`reviewer` (`Gemini 4 Argon High`) trên Step 3 MEDIUM (`surfshark.rs`)**:
+  - Round 1: `FAIL` (1 BLOCKER lỗi escape `\"[$json]\"` trong raw string PowerShell, 1 MAJOR thứ tự ưu tiên phân loại `OpenVPN Data Channel Offload` và `OtherVpn`, 1 MINOR bổ sung test live adapter).
+  - Round 2: Đã sửa + khử lint `clippy::if_same_then_else` → **`PASS`**.
+- **`reviewer` (`Gemini 4 Argon High`) trên Step 8 MEDIUM (`src/types.ts`, `src/strings.ts`, `src/main.ts`)**:
+  - Round 1: `FAIL` (2 MAJOR: fallback `linkedGologinProfileId` khi bấm Sync ngay không đổi dropdown, và giữ `#toast-container` khi chuyển tab sau `create_slot`; 1 MINOR: giữ trạng thái `selected` của dropdown trên tab GoLogin).
+  - Round 2: Đã sửa toàn bộ → **`PASS`**.

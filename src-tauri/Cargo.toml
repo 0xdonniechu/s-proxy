@@ -1,0 +1,24 @@
+[package]
+name = "s_proxy"
+version = "0.1.0"
+description = "Local Hybrid VPN Proxy Hub for Surfshark and GoLogin on Windows"
+authors = ["0xdonniechu <211609259+0xdonniechu@users.noreply.github.com>"]
+edition = "2021"
+
+[lib]
+name = "s_proxy_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.4.1", features = [] }
+
+[dependencies]
+tauri = { version = "2.12", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "sync", "macros", "process"] }
+socket2 = { version = "0.6", features = ["all"] }
+
+[lints.rust]
+unsafe_code = "deny"
