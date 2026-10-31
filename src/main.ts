@@ -7,19 +7,23 @@ import type {
   DetectedAdapter,
   GoLoginProfileSummary,
   HubSnapshot,
+  ProviderView,
   ProxySlotView,
+  SaveProviderPayload,
   SettingsUpdatePayload,
   SurfsharkLocation,
+  VpnProvider,
 } from "./types";
 
 // State
 let snapshot: HubSnapshot | null = null;
 let currentLanguage: AppLanguage = "en";
-let activeTab: "hub" | "status" | "catalog" | "gologin" | "settings" = "hub";
+let activeTab: "hub" | "status" | "catalog" | "providers" | "gologin" | "settings" = "hub";
 
 // Catalog filter state
 let catalogSearchQuery = "";
 let catalogFilterType: "all" | "generic" | "static" = "all";
+let catalogProviderFilter: "all" | VpnProvider = "all";
 
 // GoLogin assignment selection state: profileId -> slotId
 const gologinSlotSelection: Record<string, string> = {};
@@ -364,6 +368,79 @@ async function handleInstallWireproxy(): Promise<void> {
   }
 }
 
+async function handleSaveProviderConfig(payload: SaveProviderPayload): Promise<void> {
+  try {
+    const res = await invoke<HubSnapshot>("save_provider_config", { payload });
+    applySnapshot(res);
+    showToast(getStrings().providersPage.savedToast);
+  } catch (err) {
+    showToast(`Provider Error: ${String(err)}`);
+  }
+}
+
+async function handleSyncProviderCatalog(provider: VpnProvider, pendingToken?: string): Promise<void> {
+  showToast(
+    currentLanguage === "vi"
+      ? `Đang đồng bộ danh sách máy chủ ${provider.toUpperCase()}...`
+      : `Syncing ${provider.toUpperCase()} catalog & credentials...`
+  );
+  try {
+    if (pendingToken && pendingToken.trim() && !pendingToken.includes("•") && snapshot) {
+      const provView = snapshot.providers.find((p) => p.provider === provider);
+      if (provView) {
+        await invoke<HubSnapshot>("save_provider_config", {
+          payload: {
+            provider,
+            privateKey: null,
+            address: provView.address,
+            dns: provView.dns,
+            apiToken: pendingToken.trim(),
+          } satisfies SaveProviderPayload,
+        });
+      }
+    }
+    const res = await invoke<HubSnapshot>("sync_provider_catalog", { provider });
+    applySnapshot(res);
+    showToast(getStrings().providersPage.syncedToast);
+  } catch (err) {
+    showToast(`Sync Error: ${String(err)}`);
+  }
+}
+
+async function handleImportProviderConfs(provider: VpnProvider, files: FileList): Promise<void> {
+  let latestSnap: HubSnapshot | null = null;
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const rawConf = await file.text();
+      const label = file.name.replace(/\.conf$/i, "").replace(/\.txt$/i, "");
+      latestSnap = await invoke<HubSnapshot>("import_provider_conf", {
+        provider,
+        rawConf,
+        label,
+      });
+    }
+    if (latestSnap) {
+      applySnapshot(latestSnap);
+      showToast(getStrings().providersPage.importedToast);
+    }
+  } catch (err) {
+    showToast(`Import Error: ${String(err)}`);
+  }
+}
+
+async function handleDeleteCustomServer(provider: VpnProvider, locationId: string): Promise<void> {
+  try {
+    const res = await invoke<HubSnapshot>("delete_custom_server", {
+      provider,
+      locationId,
+    });
+    applySnapshot(res);
+  } catch (err) {
+    showToast(`Delete Error: ${String(err)}`);
+  }
+}
+
 async function copyToClipboard(text: string, label: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
@@ -401,6 +478,13 @@ function renderSidebarRail(): string {
             <circle cx="12" cy="12" r="10"/>
             <line x1="2" y1="12" x2="22" y2="12"/>
             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        </button>
+        <button type="button" class="nav-btn tab-btn ${activeTab === "providers" ? "active" : ""}" data-tab="providers" title="${escapeHtml(strings.tabs.providersTab)}">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+            <polyline points="2 17 12 22 22 17"/>
+            <polyline points="2 12 12 17 22 12"/>
           </svg>
         </button>
         <button type="button" class="nav-btn tab-btn ${activeTab === "gologin" ? "active" : ""}" data-tab="gologin" title="${escapeHtml(strings.tabs.gologinSync)}">
@@ -989,12 +1073,15 @@ function renderStatusTab(snap: HubSnapshot): string {
   `;
 }
 
-// 3. View 2: Locations Tab (Surfshark Catalog)
+// 3. View 2: Locations Tab (Multi-Provider Catalog)
 function renderCatalogTab(snap: HubSnapshot): string {
   const strings = getStrings();
 
   const query = catalogSearchQuery.trim().toLowerCase();
   const filtered = snap.locations.filter((loc: SurfsharkLocation) => {
+    if (catalogProviderFilter !== "all" && loc.provider !== catalogProviderFilter) {
+      return false;
+    }
     if (catalogFilterType !== "all" && loc.locationType !== catalogFilterType) {
       return false;
     }
@@ -1011,11 +1098,16 @@ function renderCatalogTab(snap: HubSnapshot): string {
   let fastestLoc: SurfsharkLocation | null = null;
   let nearestLoc: SurfsharkLocation | null = null;
 
-  if (snap.locations.length > 0) {
-    const sortedByLoad = [...snap.locations].sort((a, b) => a.load - b.load);
+  const poolForRec =
+    catalogProviderFilter === "all"
+      ? snap.locations
+      : snap.locations.filter((l) => l.provider === catalogProviderFilter);
+
+  if (poolForRec.length > 0) {
+    const sortedByLoad = [...poolForRec].sort((a, b) => a.load - b.load);
     fastestLoc = sortedByLoad[0] || null;
 
-    const sgLoc = snap.locations.find((l) => l.countryCode === "SG");
+    const sgLoc = poolForRec.find((l) => l.countryCode === "SG");
     if (sgLoc && sgLoc.id !== fastestLoc?.id) {
       nearestLoc = sgLoc;
     } else {
@@ -1026,12 +1118,30 @@ function renderCatalogTab(snap: HubSnapshot): string {
     }
   }
 
+  const providerTabsHtml = [
+    { id: "all", label: `All (${snap.locations.length})` },
+    ...snap.providers.map((p) => ({
+      id: p.provider,
+      label: `${p.displayName} (${p.serverCount})`,
+    })),
+  ]
+    .map(
+      (pt) => `
+      <button type="button" class="pill-tab catalog-provider-tab ${catalogProviderFilter === pt.id ? "active" : ""}" data-provider="${escapeHtml(pt.id)}">
+        ${escapeHtml(pt.label)}
+      </button>
+    `
+    )
+    .join("");
+
   const locationCards =
     filtered.length === 0
       ? `<div class="empty-card" style="grid-column: 1 / -1;">${escapeHtml(strings.catalog.noServersMatch)}</div>`
       : filtered
           .map((loc: SurfsharkLocation) => {
             const loadClass = loc.load > 70 ? "load-high" : loc.load > 40 ? "load-med" : "load-low";
+            const provShort = loc.provider.toUpperCase();
+            const isCustomLoc = loc.region === "Custom";
             return `
               <div class="surf-card location-card">
                 <div class="loc-card-main">
@@ -1047,10 +1157,17 @@ function renderCatalogTab(snap: HubSnapshot): string {
                   </div>
                 </div>
                 <div class="loc-card-footer">
-                  <span class="mono subtext-sm">${escapeHtml(loc.connectionName)}</span>
-                  <button type="button" class="btn btn-sm btn-primary btn-create-location-slot" data-loc-id="${escapeHtml(loc.id)}" data-loc-label="${escapeHtml(`${loc.countryCode} • ${loc.country} - ${loc.location}`)}">
-                    ${escapeHtml(strings.catalog.createAndStart)}
-                  </button>
+                  <span class="mono subtext-sm">[${escapeHtml(provShort)}] ${escapeHtml(loc.connectionName)}</span>
+                  <div style="display:flex; gap:6px; align-items:center;">
+                    ${
+                      isCustomLoc
+                        ? `<button type="button" class="btn btn-sm btn-danger btn-delete-custom-server" data-provider="${escapeHtml(loc.provider)}" data-loc-id="${escapeHtml(loc.id)}" title="Delete">✕</button>`
+                        : ""
+                    }
+                    <button type="button" class="btn btn-sm btn-primary btn-create-location-slot" data-loc-id="${escapeHtml(loc.id)}" data-loc-label="${escapeHtml(`${loc.countryCode} • ${loc.country} - ${loc.location}`)}">
+                      ${escapeHtml(strings.catalog.createAndStart)}
+                    </button>
+                  </div>
                 </div>
               </div>
             `;
@@ -1058,6 +1175,13 @@ function renderCatalogTab(snap: HubSnapshot): string {
           .join("");
 
   return `
+    <!-- Multi-Provider Filter Bar -->
+    <div class="provider-filter-bar">
+      <div class="pill-tabs" role="tablist">
+        ${providerTabsHtml}
+      </div>
+    </div>
+
     <!-- Top Search & Filter Bar -->
     <div class="catalog-top-row">
       <div class="search-box">
@@ -1141,6 +1265,171 @@ function renderCatalogTab(snap: HubSnapshot): string {
       <div class="section-title-sm">${escapeHtml(strings.catalog.allLocations)}</div>
       <div class="locations-grid">
         ${locationCards}
+      </div>
+    </div>
+  `;
+}
+
+// 3b. View 2b: Multi-Provider Configuration Tab
+function renderProvidersTab(snap: HubSnapshot): string {
+  const strings = getStrings();
+  const pp = strings.providersPage;
+
+  const metaByProvider: Record<
+    VpnProvider,
+    { badgeText: string; badgeClass: string; desc: string; supportsApiSync: boolean; supportsToken: boolean }
+  > = {
+    surfshark: {
+      badgeText: "SS",
+      badgeClass: "prov-surfshark",
+      desc: pp.surfsharkDesc,
+      supportsApiSync: true,
+      supportsToken: false,
+    },
+    nordvpn: {
+      badgeText: "NV",
+      badgeClass: "prov-nordvpn",
+      desc: pp.nordvpnDesc,
+      supportsApiSync: true,
+      supportsToken: true,
+    },
+    mullvad: {
+      badgeText: "MV",
+      badgeClass: "prov-mullvad",
+      desc: pp.mullvadDesc,
+      supportsApiSync: true,
+      supportsToken: false,
+    },
+    protonvpn: {
+      badgeText: "PV",
+      badgeClass: "prov-protonvpn",
+      desc: pp.protonvpnDesc,
+      supportsApiSync: false,
+      supportsToken: false,
+    },
+    custom: {
+      badgeText: "WG",
+      badgeClass: "prov-custom",
+      desc: pp.customDesc,
+      supportsApiSync: false,
+      supportsToken: false,
+    },
+  };
+
+  const providerCardsHtml = snap.providers
+    .map((p: ProviderView) => {
+      const meta = metaByProvider[p.provider];
+      const serverCountText = pp.serversAvailable.replace("{count}", String(p.serverCount));
+      return `
+        <div class="surf-card provider-card ${p.isReady ? "is-ready" : ""}" data-provider="${escapeHtml(p.provider)}">
+          <div class="provider-card-header">
+            <div class="provider-brand-row">
+              <div class="provider-logo-badge ${meta.badgeClass}">${escapeHtml(meta.badgeText)}</div>
+              <div>
+                <div class="slot-name">${escapeHtml(p.displayName)}</div>
+                <div class="subtext-sm">
+                  <span class="badge ${p.hasPrivateKey ? "badge-running" : "badge-stopped"}">
+                    ${escapeHtml(p.hasPrivateKey ? pp.statusReady : pp.statusMissingKey)}
+                  </span>
+                  <span class="badge badge-os mono">${escapeHtml(serverCountText)}</span>
+                </div>
+              </div>
+            </div>
+            <button type="button" class="btn btn-sm btn-secondary btn-browse-provider" data-provider="${escapeHtml(p.provider)}">
+              ${escapeHtml(pp.browseServersBtn)}
+            </button>
+          </div>
+
+          <div class="subtext">${escapeHtml(meta.desc)}</div>
+
+          ${
+            meta.supportsToken
+              ? `
+            <div class="form-group">
+              <label>${escapeHtml(pp.apiTokenLabel)}</label>
+              <input
+                type="password"
+                class="text-input mono prov-token-input"
+                data-provider="${escapeHtml(p.provider)}"
+                placeholder="${escapeHtml(p.hasApiToken ? p.apiTokenMasked : pp.apiTokenPlaceholder)}"
+              />
+            </div>
+          `
+              : ""
+          }
+
+          <div class="form-group">
+            <label>${escapeHtml(pp.privateKeyLabel)}</label>
+            <input
+              type="password"
+              class="text-input mono prov-key-input"
+              data-provider="${escapeHtml(p.provider)}"
+              placeholder="${escapeHtml(p.hasPrivateKey ? p.privateKeyMasked : pp.privateKeyPlaceholder)}"
+            />
+          </div>
+
+          <div class="provider-form-grid">
+            <div class="form-group">
+              <label>${escapeHtml(pp.addressLabel)}</label>
+              <input
+                type="text"
+                class="text-input mono prov-addr-input"
+                data-provider="${escapeHtml(p.provider)}"
+                value="${escapeHtml(p.address)}"
+              />
+            </div>
+            <div class="form-group">
+              <label>${escapeHtml(pp.dnsLabel)}</label>
+              <input
+                type="text"
+                class="text-input mono prov-dns-input"
+                data-provider="${escapeHtml(p.provider)}"
+                value="${escapeHtml(p.dns)}"
+              />
+            </div>
+          </div>
+
+          <div class="provider-actions-row">
+            <div class="btn-group-sm">
+              <button type="button" class="btn btn-sm btn-primary btn-save-provider" data-provider="${escapeHtml(p.provider)}">
+                ${escapeHtml(pp.saveProviderBtn)}
+              </button>
+              ${
+                meta.supportsApiSync
+                  ? `<button type="button" class="btn btn-sm btn-secondary btn-sync-provider" data-provider="${escapeHtml(p.provider)}">
+                       ${escapeHtml(pp.syncCatalogBtn)}
+                     </button>`
+                  : ""
+              }
+            </div>
+            <div>
+              <button type="button" class="btn btn-sm btn-secondary btn-import-provider-conf" data-provider="${escapeHtml(p.provider)}">
+                ${escapeHtml(pp.importConfFilesBtn)}
+              </button>
+              <input
+                type="file"
+                class="prov-conf-file-input"
+                data-provider="${escapeHtml(p.provider)}"
+                accept=".conf,.txt"
+                multiple
+                style="display:none"
+              />
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <div class="settings-view">
+      <div class="settings-header-banner">
+        <h2 class="section-title">${escapeHtml(pp.title)}</h2>
+        <div class="subtext">${escapeHtml(pp.subtitle)}</div>
+      </div>
+
+      <div class="providers-grid">
+        ${providerCardsHtml}
       </div>
     </div>
   `;
@@ -1391,6 +1680,9 @@ function render(): void {
       break;
     case "catalog":
       panelContent = renderCatalogTab(snapshot);
+      break;
+    case "providers":
+      panelContent = renderProvidersTab(snapshot);
       break;
     case "gologin":
       panelContent = renderGoLoginTab(snapshot);
@@ -1681,6 +1973,92 @@ function attachEventListeners(): void {
       if (filter) {
         catalogFilterType = filter;
         render();
+      }
+    });
+  });
+
+  // Catalog provider filter pill tabs
+  document.querySelectorAll<HTMLButtonElement>(".catalog-provider-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const prov = btn.getAttribute("data-provider") as typeof catalogProviderFilter | null;
+      if (prov) {
+        catalogProviderFilter = prov;
+        render();
+      }
+    });
+  });
+
+  // Providers tab actions
+  document.querySelectorAll<HTMLButtonElement>(".btn-browse-provider").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const prov = btn.getAttribute("data-provider") as VpnProvider | null;
+      if (prov) {
+        catalogProviderFilter = prov;
+        activeTab = "catalog";
+        render();
+      }
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>(".btn-save-provider").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const prov = btn.getAttribute("data-provider") as VpnProvider | null;
+      if (!prov || !snapshot) return;
+      const card = btn.closest(".provider-card");
+      if (!card) return;
+      const keyInput = card.querySelector<HTMLInputElement>(".prov-key-input");
+      const addrInput = card.querySelector<HTMLInputElement>(".prov-addr-input");
+      const dnsInput = card.querySelector<HTMLInputElement>(".prov-dns-input");
+      const tokenInput = card.querySelector<HTMLInputElement>(".prov-token-input");
+
+      const currentProv = snapshot.providers.find((p) => p.provider === prov);
+      const newKey = keyInput?.value.trim() ? keyInput.value.trim() : null;
+      const newToken = tokenInput?.value.trim() ? tokenInput.value.trim() : null;
+
+      void handleSaveProviderConfig({
+        provider: prov,
+        privateKey: newKey,
+        address: addrInput?.value.trim() || currentProv?.address || "10.14.0.2/16",
+        dns: dnsInput?.value.trim() || currentProv?.dns || "1.1.1.1",
+        apiToken: newToken,
+      });
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>(".btn-sync-provider").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const prov = btn.getAttribute("data-provider") as VpnProvider | null;
+      if (!prov) return;
+      const card = btn.closest(".provider-card");
+      const tokenInput = card?.querySelector<HTMLInputElement>(".prov-token-input");
+      void handleSyncProviderCatalog(prov, tokenInput?.value);
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>(".btn-import-provider-conf").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const card = btn.closest(".provider-card");
+      const fileInput = card?.querySelector<HTMLInputElement>(".prov-conf-file-input");
+      fileInput?.click();
+    });
+  });
+
+  document.querySelectorAll<HTMLInputElement>(".prov-conf-file-input").forEach((input) => {
+    input.addEventListener("change", () => {
+      const prov = input.getAttribute("data-provider") as VpnProvider | null;
+      if (prov && input.files && input.files.length > 0) {
+        void handleImportProviderConfs(prov, input.files);
+      }
+    });
+  });
+
+  // Catalog delete custom server
+  document.querySelectorAll<HTMLButtonElement>(".btn-delete-custom-server").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const prov = btn.getAttribute("data-provider") as VpnProvider | null;
+      const locId = btn.getAttribute("data-loc-id");
+      if (prov && locId) {
+        void handleDeleteCustomServer(prov, locId);
       }
     });
   });

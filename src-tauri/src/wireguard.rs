@@ -1,4 +1,4 @@
-use crate::settings::{app_data_dir, validate_wg_key_format};
+use crate::settings::{app_data_dir, validate_wg_address_cidr, validate_wg_key_format};
 use std::fs;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpListener};
 use std::path::PathBuf;
@@ -35,18 +35,37 @@ impl Drop for WireproxyHandle {
     }
 }
 
-pub fn validate_endpoint_host(host: &str) -> Result<(), String> {
-    let trimmed = host.trim();
-    if trimmed.is_empty() || trimmed.len() > 253 {
-        return Err("Invalid Surfshark server hostname".to_string());
+pub fn parse_and_validate_endpoint(endpoint_or_host: &str) -> Result<String, String> {
+    let trimmed = endpoint_or_host.trim();
+    if trimmed.is_empty() || trimmed.len() > 260 {
+        return Err("Invalid WireGuard server endpoint".to_string());
     }
-    if !trimmed
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+    let (host, port) = if let Some((h, p)) = trimmed.split_once(':') {
+        let parsed_port: u16 = p
+            .trim()
+            .parse()
+            .map_err(|_| format!("Invalid WireGuard endpoint port in '{trimmed}'"))?;
+        if parsed_port == 0 {
+            return Err("WireGuard endpoint port cannot be 0".to_string());
+        }
+        (h.trim(), parsed_port)
+    } else {
+        (trimmed, 51820u16)
+    };
+
+    if host.is_empty()
+        || !host
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
     {
-        return Err(format!("Server hostname contains invalid characters: {trimmed}"));
+        return Err(format!("Server hostname contains invalid characters: {host}"));
     }
-    Ok(())
+
+    Ok(format!("{host}:{port}"))
+}
+
+pub fn validate_endpoint_host(host: &str) -> Result<(), String> {
+    parse_and_validate_endpoint(host).map(|_| ())
 }
 
 pub fn render_wireproxy_conf(
@@ -59,13 +78,9 @@ pub fn render_wireproxy_conf(
 ) -> Result<String, String> {
     validate_wg_key_format(wg_private_key)?;
     validate_wg_key_format(peer_public_key)?;
-    validate_endpoint_host(connection_name)?;
+    let full_endpoint = parse_and_validate_endpoint(connection_name)?;
 
-    let addr_clean = wg_address.trim();
-    let addr_ip = addr_clean.split('/').next().unwrap_or("").trim();
-    if addr_ip.parse::<Ipv4Addr>().is_err() {
-        return Err(format!("Invalid WireGuard interface IPv4: {addr_clean}"));
-    }
+    let addr_clean = validate_wg_address_cidr(wg_address)?;
 
     let dns_clean = wg_dns.split(',').next().unwrap_or("").trim();
     if dns_clean.parse::<Ipv4Addr>().is_err() {
@@ -82,7 +97,7 @@ pub fn render_wireproxy_conf(
          \n\
          [Peer]\n\
          PublicKey = {}\n\
-         Endpoint = {}:51820\n\
+         Endpoint = {}\n\
          AllowedIPs = 0.0.0.0/0\n\
          PersistentKeepalive = 25\n\
          \n\
@@ -92,7 +107,7 @@ pub fn render_wireproxy_conf(
         addr_clean,
         dns_clean,
         peer_public_key.trim(),
-        connection_name.trim(),
+        full_endpoint,
         internal_socks_port
     ))
 }
@@ -320,6 +335,24 @@ mod tests {
             "162.252.172.57",
             pub_k,
             "bad.host\n[Socks5]\nBindAddress = 0.0.0.0:9999",
+            21801
+        )
+        .is_err());
+        assert!(render_wireproxy_conf(
+            priv_k,
+            "10.14.0.2/16\nEndpoint = evil.com:51820",
+            "162.252.172.57",
+            pub_k,
+            "sg-sng.prod.surfshark.com",
+            21801
+        )
+        .is_err());
+        assert!(render_wireproxy_conf(
+            priv_k,
+            "10.14.0.2/99",
+            "162.252.172.57",
+            pub_k,
+            "sg-sng.prod.surfshark.com",
             21801
         )
         .is_err());

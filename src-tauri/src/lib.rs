@@ -1,4 +1,5 @@
 pub mod gologin;
+pub mod providers;
 pub mod proxy_engine;
 pub mod settings;
 pub mod surfshark;
@@ -8,11 +9,18 @@ use gologin::{
     check_slot_egress_blocking, detect_host_isp_ip_blocking, fetch_gologin_profiles_blocking,
     update_gologin_profile_proxy_blocking, EgressCheckResult, GoLoginProfileSummary, LeakStatus,
 };
+use providers::{
+    fetch_mullvad_catalog_blocking, fetch_nordvpn_catalog_blocking,
+    fetch_nordvpn_private_key_blocking, load_cached_provider_locations,
+    parse_and_build_custom_location, validate_provider_network_fields, ProviderView,
+    SaveProviderPayload, VpnProvider,
+};
 use proxy_engine::{start_proxy_listener, RunningProxyHandle, UpstreamConfig};
 use serde::{Deserialize, Serialize};
 use settings::{
-    load_state_from_path, parse_wg_conf, save_state_to_path, state_file_path, validate_slots,
-    PersistedState, ProxySlotConfig, SettingsUpdatePayload, SettingsView, SlotMode,
+    ensure_all_providers, load_state_from_path, parse_wg_conf, save_state_to_path, state_file_path,
+    validate_slots, validate_wg_key_format, PersistedState, ProxySlotConfig, SettingsUpdatePayload,
+    SettingsView, SlotMode,
 };
 use std::collections::{HashMap, HashSet};
 use std::net::Ipv4Addr;
@@ -49,6 +57,7 @@ pub struct ProxySlotView {
     pub socks5_uri: String,
     pub http_uri: String,
     pub mode: SlotMode,
+    pub provider: VpnProvider,
     pub location_id: String,
     pub country_code: String,
     pub location_label: String,
@@ -75,6 +84,7 @@ pub struct HubSnapshot {
     pub slots: Vec<ProxySlotView>,
     pub locations_count: usize,
     pub locations: Vec<SurfsharkLocation>,
+    pub providers: Vec<ProviderView>,
     pub gologin_profiles: Vec<GoLoginProfileSummary>,
     pub settings: SettingsView,
 }
@@ -117,6 +127,7 @@ pub struct HubCore {
     pub persisted: PersistedState,
     pub adapters: Vec<DetectedAdapter>,
     pub locations: Vec<SurfsharkLocation>,
+    pub provider_catalogs: HashMap<VpnProvider, Vec<SurfsharkLocation>>,
     pub gologin_profiles: Vec<GoLoginProfileSummary>,
     pub host_isp_ip: Option<String>,
     runtimes: HashMap<String, ActiveSlotRuntime>,
@@ -133,15 +144,81 @@ impl HubCore {
         cleanup_stale_runtime_configs();
         let persisted = load_state_from_path(&state_file_path());
         let locations = load_local_catalog();
+        let mut provider_catalogs = HashMap::new();
+        provider_catalogs.insert(
+            VpnProvider::Nordvpn,
+            load_cached_provider_locations(VpnProvider::Nordvpn),
+        );
+        provider_catalogs.insert(
+            VpnProvider::Mullvad,
+            load_cached_provider_locations(VpnProvider::Mullvad),
+        );
         let adapters = detect_windows_adapters();
         Self {
             persisted,
             adapters,
             locations,
+            provider_catalogs,
             gologin_profiles: Vec::new(),
             host_isp_ip: None,
             runtimes: HashMap::new(),
         }
+    }
+
+    pub fn provider_locations(&self, provider: VpnProvider) -> Vec<SurfsharkLocation> {
+        let mut list = match provider {
+            VpnProvider::Surfshark => self.locations.clone(),
+            VpnProvider::Nordvpn | VpnProvider::Mullvad => self
+                .provider_catalogs
+                .get(&provider)
+                .cloned()
+                .unwrap_or_default(),
+            VpnProvider::Protonvpn | VpnProvider::Custom => Vec::new(),
+        };
+        if let Some(cfg) = self
+            .persisted
+            .providers
+            .iter()
+            .find(|p| p.provider == provider)
+        {
+            for custom in &cfg.custom_locations {
+                if !list.iter().any(|l| l.id == custom.id) {
+                    list.push(custom.clone());
+                }
+            }
+        }
+        list
+    }
+
+    pub fn all_locations(&self) -> Vec<SurfsharkLocation> {
+        let mut combined = Vec::new();
+        for p in VpnProvider::all() {
+            combined.append(&mut self.provider_locations(p));
+        }
+        combined
+    }
+
+    pub fn credentials_for_provider(&self, provider: VpnProvider) -> (String, String, String) {
+        if let Some(cfg) = self
+            .persisted
+            .providers
+            .iter()
+            .find(|p| p.provider == provider)
+        {
+            if provider == VpnProvider::Surfshark && cfg.private_key.trim().is_empty() {
+                return (
+                    self.persisted.settings.wg_private_key.clone(),
+                    self.persisted.settings.wg_address.clone(),
+                    self.persisted.settings.wg_dns.clone(),
+                );
+            }
+            return (cfg.private_key.clone(), cfg.address.clone(), cfg.dns.clone());
+        }
+        (
+            self.persisted.settings.wg_private_key.clone(),
+            self.persisted.settings.wg_address.clone(),
+            self.persisted.settings.wg_dns.clone(),
+        )
     }
 
     pub fn stop_all(&mut self) {
@@ -296,6 +373,7 @@ impl HubCore {
                     socks5_uri: format!("socks5://127.0.0.1:{}", cfg.port),
                     http_uri: format!("http://127.0.0.1:{}", cfg.port),
                     mode: cfg.mode,
+                    provider: cfg.provider,
                     location_id: cfg.location_id.clone(),
                     country_code: cfg.country_code.clone(),
                     location_label: cfg.location_label.clone(),
@@ -315,13 +393,27 @@ impl HubCore {
             })
             .collect();
 
+        let all_locs = self.all_locations();
+        let providers: Vec<ProviderView> = VpnProvider::all()
+            .into_iter()
+            .map(|p| {
+                let count = self.provider_locations(p).len();
+                if let Some(cfg) = self.persisted.providers.iter().find(|c| c.provider == p) {
+                    cfg.to_view(count)
+                } else {
+                    providers::ProviderConfig::for_provider(p).to_view(count)
+                }
+            })
+            .collect();
+
         HubSnapshot {
             host_isp_ip: self.host_isp_ip.clone(),
             surfshark_adapter: self.active_surfshark_adapter(),
             adapters: self.adapters.clone(),
             slots,
-            locations_count: self.locations.len(),
-            locations: self.locations.clone(),
+            locations_count: all_locs.len(),
+            locations: all_locs,
+            providers,
             gologin_profiles: self.gologin_profiles.clone(),
             settings: self.persisted.settings.to_view(wireproxy_ready),
         }
@@ -331,7 +423,7 @@ impl HubCore {
 pub type SharedHub = Arc<Mutex<HubCore>>;
 
 async fn start_slot_internal(hub: &SharedHub, slot_id: &str) -> Result<(), String> {
-    let (slot_cfg, settings, adapters_isp_ip, selected_adapter_res) = {
+    let (slot_cfg, settings, provider_creds, adapters_isp_ip, selected_adapter_res) = {
         let mut guard = hub.lock().map_err(|_| "State lock poisoned".to_string())?;
         guard.adapters = detect_windows_adapters();
         let cfg = guard
@@ -342,6 +434,7 @@ async fn start_slot_internal(hub: &SharedHub, slot_id: &str) -> Result<(), Strin
             .cloned()
             .ok_or_else(|| format!("Slot '{slot_id}' not found"))?;
         let settings = guard.persisted.settings.clone();
+        let creds = guard.credentials_for_provider(cfg.provider);
         let isp_ip = guard.primary_isp_ipv4();
         let sel = if cfg.mode == SlotMode::AdapterBridge {
             Some(guard.select_adapter_for_slot(&cfg.adapter_hint))
@@ -351,7 +444,7 @@ async fn start_slot_internal(hub: &SharedHub, slot_id: &str) -> Result<(), Strin
         if let Some(rt) = guard.runtimes.get_mut(slot_id) {
             rt.stop_handles();
         }
-        (cfg, settings, isp_ip, sel)
+        (cfg, settings, creds, isp_ip, sel)
     };
 
     let bind_ip = if settings.allow_lan {
@@ -444,8 +537,12 @@ async fn start_slot_internal(hub: &SharedHub, slot_id: &str) -> Result<(), Strin
             }
         }
         SlotMode::UserspaceWg => {
-            if settings.wg_private_key.trim().is_empty() {
-                let msg = "Missing Surfshark WireGuard PrivateKey in Settings".to_string();
+            let (prov_key, prov_addr, prov_dns) = provider_creds;
+            if prov_key.trim().is_empty() {
+                let msg = format!(
+                    "Missing {} WireGuard PrivateKey in Providers tab",
+                    slot_cfg.provider.display_name()
+                );
                 let mut guard = hub.lock().map_err(|_| "State lock poisoned".to_string())?;
                 guard.runtimes.insert(
                     slot_cfg.id.clone(),
@@ -453,7 +550,7 @@ async fn start_slot_internal(hub: &SharedHub, slot_id: &str) -> Result<(), Strin
                         proxy_handle: None,
                         wg_handle: None,
                         bound_adapter_name: "wireproxy".to_string(),
-                        bound_adapter_ip: settings.wg_address.clone(),
+                        bound_adapter_ip: prov_addr,
                         status: SlotRuntimeStatus::Error,
                         status_detail: msg.clone(),
                         egress: None,
@@ -465,9 +562,9 @@ async fn start_slot_internal(hub: &SharedHub, slot_id: &str) -> Result<(), Strin
             let mut wg_handle = match spawn_wireproxy_for_slot(
                 &slot_cfg.id,
                 &settings.wireproxy_path,
-                &settings.wg_private_key,
-                &settings.wg_address,
-                &settings.wg_dns,
+                &prov_key,
+                &prov_addr,
+                &prov_dns,
                 &slot_cfg.pub_key,
                 &slot_cfg.connection_name,
             )
@@ -595,6 +692,21 @@ async fn save_settings(
 ) -> Result<HubSnapshot, String> {
     let mut guard = state.lock().map_err(|_| "State lock poisoned".to_string())?;
     guard.persisted.settings.apply_update(payload)?;
+    let (sk, sa, sd) = (
+        guard.persisted.settings.wg_private_key.clone(),
+        guard.persisted.settings.wg_address.clone(),
+        guard.persisted.settings.wg_dns.clone(),
+    );
+    if let Some(surf) = guard
+        .persisted
+        .providers
+        .iter_mut()
+        .find(|p| p.provider == VpnProvider::Surfshark)
+    {
+        surf.private_key = sk;
+        surf.address = sa;
+        surf.dns = sd;
+    }
     save_state_to_path(&state_file_path(), &guard.persisted)?;
     Ok(guard.build_snapshot())
 }
@@ -606,10 +718,210 @@ async fn import_wg_conf(
 ) -> Result<HubSnapshot, String> {
     let parsed = parse_wg_conf(&raw_conf)?;
     let mut guard = state.lock().map_err(|_| "State lock poisoned".to_string())?;
-    guard.persisted.settings.wg_private_key = parsed.private_key;
-    guard.persisted.settings.wg_address = parsed.address;
-    guard.persisted.settings.wg_dns = parsed.dns;
+    guard.persisted.settings.wg_private_key = parsed.private_key.clone();
+    guard.persisted.settings.wg_address = parsed.address.clone();
+    guard.persisted.settings.wg_dns = parsed.dns.clone();
+    if let Some(surf) = guard
+        .persisted
+        .providers
+        .iter_mut()
+        .find(|p| p.provider == VpnProvider::Surfshark)
+    {
+        surf.private_key = parsed.private_key;
+        surf.address = parsed.address;
+        surf.dns = parsed.dns;
+    }
     save_state_to_path(&state_file_path(), &guard.persisted)?;
+    Ok(guard.build_snapshot())
+}
+
+#[tauri::command]
+async fn save_provider_config(
+    payload: SaveProviderPayload,
+    state: State<'_, SharedHub>,
+) -> Result<HubSnapshot, String> {
+    let hub = Arc::clone(&state);
+    let slots_to_restart: Vec<String> = {
+        let mut guard = hub.lock().map_err(|_| "State lock poisoned".to_string())?;
+        ensure_all_providers(&mut guard.persisted);
+        let (clean_addr, clean_dns) =
+            validate_provider_network_fields(&payload.address, &payload.dns)?;
+
+        let prov_cfg = guard
+            .persisted
+            .providers
+            .iter_mut()
+            .find(|p| p.provider == payload.provider)
+            .ok_or_else(|| "Provider not found".to_string())?;
+
+        if let Some(ref pk) = payload.private_key {
+            let trimmed = pk.trim();
+            if !trimmed.is_empty() && !trimmed.contains('•') {
+                validate_wg_key_format(trimmed)?;
+                prov_cfg.private_key = trimmed.to_string();
+            } else if trimmed.is_empty() {
+                prov_cfg.private_key.clear();
+            }
+        }
+
+        if let Some(ref tok) = payload.api_token {
+            let trimmed = tok.trim();
+            if !trimmed.contains('•') {
+                prov_cfg.api_token = trimmed.to_string();
+            }
+        }
+
+        prov_cfg.address = clean_addr.clone();
+        prov_cfg.dns = clean_dns.clone();
+        let updated_pk = prov_cfg.private_key.clone();
+
+        if payload.provider == VpnProvider::Surfshark {
+            guard.persisted.settings.wg_private_key = updated_pk;
+            guard.persisted.settings.wg_address = clean_addr;
+            guard.persisted.settings.wg_dns = clean_dns;
+        }
+
+        save_state_to_path(&state_file_path(), &guard.persisted)?;
+
+        guard
+            .persisted
+            .slots
+            .iter()
+            .filter_map(|s| {
+                let is_running = guard
+                    .runtimes
+                    .get(&s.id)
+                    .is_some_and(|rt| rt.status == SlotRuntimeStatus::Running);
+                if is_running && s.mode == SlotMode::UserspaceWg && s.provider == payload.provider {
+                    Some(s.id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    };
+
+    for slot_id in slots_to_restart {
+        let _ = start_slot_internal(&hub, &slot_id).await;
+    }
+
+    let guard = hub.lock().map_err(|_| "State lock poisoned".to_string())?;
+    Ok(guard.build_snapshot())
+}
+
+#[tauri::command]
+async fn sync_provider_catalog(
+    provider: VpnProvider,
+    state: State<'_, SharedHub>,
+) -> Result<HubSnapshot, String> {
+    let hub = Arc::clone(&state);
+    let api_token = {
+        let guard = hub.lock().map_err(|_| "State lock poisoned".to_string())?;
+        guard
+            .persisted
+            .providers
+            .iter()
+            .find(|p| p.provider == provider)
+            .map(|p| p.api_token.clone())
+            .unwrap_or_default()
+    };
+
+    let (fetched_locs, maybe_fetched_pk) = tokio::task::spawn_blocking(move || match provider {
+        VpnProvider::Surfshark => Ok::<_, String>((load_local_catalog(), None)),
+        VpnProvider::Nordvpn => {
+            let pk = if !api_token.trim().is_empty() {
+                Some(fetch_nordvpn_private_key_blocking(&api_token)?)
+            } else {
+                None
+            };
+            let locs = fetch_nordvpn_catalog_blocking()?;
+            Ok((locs, pk))
+        }
+        VpnProvider::Mullvad => {
+            let locs = fetch_mullvad_catalog_blocking()?;
+            Ok((locs, None))
+        }
+        VpnProvider::Protonvpn | VpnProvider::Custom => Ok((Vec::new(), None)),
+    })
+    .await
+    .map_err(|e| format!("Provider sync task failed: {e}"))??;
+
+    let mut guard = hub.lock().map_err(|_| "State lock poisoned".to_string())?;
+    if provider == VpnProvider::Surfshark {
+        if !fetched_locs.is_empty() {
+            guard.locations = fetched_locs;
+        }
+    } else if !fetched_locs.is_empty() {
+        guard.provider_catalogs.insert(provider, fetched_locs);
+    }
+
+    if let Some(new_pk) = maybe_fetched_pk {
+        if let Some(cfg) = guard
+            .persisted
+            .providers
+            .iter_mut()
+            .find(|p| p.provider == provider)
+        {
+            cfg.private_key = new_pk;
+        }
+        save_state_to_path(&state_file_path(), &guard.persisted)?;
+    }
+
+    Ok(guard.build_snapshot())
+}
+
+#[tauri::command]
+async fn import_provider_conf(
+    provider: VpnProvider,
+    raw_conf: String,
+    label: String,
+    state: State<'_, SharedHub>,
+) -> Result<HubSnapshot, String> {
+    let (private_key, address, dns, maybe_loc) =
+        parse_and_build_custom_location(provider, &raw_conf, &label)?;
+    let mut guard = state.lock().map_err(|_| "State lock poisoned".to_string())?;
+    ensure_all_providers(&mut guard.persisted);
+    if let Some(cfg) = guard
+        .persisted
+        .providers
+        .iter_mut()
+        .find(|p| p.provider == provider)
+    {
+        cfg.private_key = private_key.clone();
+        cfg.address = address.clone();
+        cfg.dns = dns.clone();
+        if let Some(loc) = maybe_loc {
+            if provider != VpnProvider::Surfshark {
+                cfg.custom_locations.retain(|l| l.id != loc.id);
+                cfg.custom_locations.push(loc);
+            }
+        }
+    }
+    if provider == VpnProvider::Surfshark {
+        guard.persisted.settings.wg_private_key = private_key;
+        guard.persisted.settings.wg_address = address;
+        guard.persisted.settings.wg_dns = dns;
+    }
+    save_state_to_path(&state_file_path(), &guard.persisted)?;
+    Ok(guard.build_snapshot())
+}
+
+#[tauri::command]
+async fn delete_custom_server(
+    provider: VpnProvider,
+    location_id: String,
+    state: State<'_, SharedHub>,
+) -> Result<HubSnapshot, String> {
+    let mut guard = state.lock().map_err(|_| "State lock poisoned".to_string())?;
+    if let Some(cfg) = guard
+        .persisted
+        .providers
+        .iter_mut()
+        .find(|p| p.provider == provider)
+    {
+        cfg.custom_locations.retain(|l| l.id != location_id);
+        save_state_to_path(&state_file_path(), &guard.persisted)?;
+    }
     Ok(guard.build_snapshot())
 }
 
@@ -624,16 +936,16 @@ async fn create_slot(
         let port = payload.port.unwrap_or_else(|| guard.next_available_port());
         let id = format!("slot-{port}");
 
-        let (loc_id, country_code, loc_label, conn_name, pub_key) =
+        let (provider, loc_id, country_code, loc_label, conn_name, pub_key) =
             if payload.mode == SlotMode::UserspaceWg {
                 let target_loc_id = payload.location_id.as_deref().unwrap_or("");
-                let loc = guard
-                    .locations
-                    .iter()
+                let all_locs = guard.all_locations();
+                let loc = all_locs
+                    .into_iter()
                     .find(|l| l.id == target_loc_id || l.connection_name == target_loc_id)
-                    .ok_or_else(|| "Selected Surfshark location not found in catalog".to_string())?
-                    .clone();
+                    .ok_or_else(|| "Selected VPN location not found in catalog".to_string())?;
                 (
+                    loc.provider,
                     loc.id,
                     loc.country_code.clone(),
                     format!("{} - {}", loc.country, loc.location),
@@ -642,6 +954,7 @@ async fn create_slot(
                 )
             } else {
                 (
+                    VpnProvider::Surfshark,
                     String::new(),
                     "VPN".to_string(),
                     "Active Surfshark Adapter".to_string(),
@@ -665,6 +978,7 @@ async fn create_slot(
             name: slot_name,
             port,
             mode: payload.mode,
+            provider,
             location_id: loc_id,
             country_code,
             location_label: loc_label,
@@ -1028,6 +1342,9 @@ pub fn run() {
             if let Some(conf) = app.config().app.windows.first() {
                 let win =
                     tauri::WebviewWindowBuilder::from_config(handle, conf)?.build()?;
+                if let Some(icon) = handle.default_window_icon().cloned() {
+                    let _ = win.set_icon(icon);
+                }
                 let win_clone = win.clone();
                 win.on_window_event(move |event| {
                     if let WindowEvent::CloseRequested { api, .. } = event {
@@ -1035,6 +1352,14 @@ pub fn run() {
                         let _ = win_clone.hide();
                     }
                 });
+            }
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                let _ = std::process::Command::new("ie4uinit.exe")
+                    .arg("-show")
+                    .creation_flags(0x08000000)
+                    .spawn();
             }
             setup_tray(handle, Arc::clone(&hub_for_setup))?;
             Ok(())
@@ -1045,6 +1370,10 @@ pub fn run() {
             save_settings,
             set_security_toggle,
             import_wg_conf,
+            save_provider_config,
+            sync_provider_catalog,
+            import_provider_conf,
+            delete_custom_server,
             create_slot,
             toggle_slot,
             start_all_slots,

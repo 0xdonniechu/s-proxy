@@ -13,6 +13,8 @@ pub enum LocationType {
 #[serde(rename_all = "camelCase")]
 pub struct SurfsharkLocation {
     pub id: String,
+    #[serde(default)]
+    pub provider: crate::providers::VpnProvider,
     pub country: String,
     pub country_code: String,
     pub location: String,
@@ -56,6 +58,7 @@ pub fn parse_locations_json(
         .filter(|e| !e.connection_name.trim().is_empty() && !e.pub_key.trim().is_empty())
         .map(|e| SurfsharkLocation {
             id: e.id,
+            provider: crate::providers::VpnProvider::Surfshark,
             country: e.country,
             country_code: e.country_code,
             location: e.location,

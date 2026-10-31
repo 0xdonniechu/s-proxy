@@ -4,6 +4,28 @@ export type SlotRuntimeStatus = "stopped" | "running" | "kill_switch" | "error";
 export type LeakStatus = "unchecked" | "safe" | "leak_blocked" | "error";
 export type AdapterKind = "surfshark" | "other_vpn" | "primary_isp";
 export type LocationType = "generic" | "static";
+export type VpnProvider = "surfshark" | "nordvpn" | "mullvad" | "protonvpn" | "custom";
+
+export interface ProviderView {
+  provider: VpnProvider;
+  displayName: string;
+  hasPrivateKey: boolean;
+  privateKeyMasked: string;
+  address: string;
+  dns: string;
+  hasApiToken: boolean;
+  apiTokenMasked: string;
+  serverCount: number;
+  isReady: boolean;
+}
+
+export interface SaveProviderPayload {
+  provider: VpnProvider;
+  privateKey: string | null;
+  address: string;
+  dns: string;
+  apiToken: string | null;
+}
 
 export interface EgressCheckResult {
   exitIp: string;
@@ -28,6 +50,7 @@ export interface DetectedAdapter {
 
 export interface SurfsharkLocation {
   id: string;
+  provider: VpnProvider;
   country: string;
   countryCode: string;
   location: string;
@@ -90,6 +113,7 @@ export interface ProxySlotView {
   socks5Uri: string;
   httpUri: string;
   mode: SlotMode;
+  provider: VpnProvider;
   locationId: string;
   countryCode: string;
   locationLabel: string;
@@ -114,6 +138,7 @@ export interface HubSnapshot {
   slots: ProxySlotView[];
   locationsCount: number;
   locations: SurfsharkLocation[];
+  providers: ProviderView[];
   gologinProfiles: GoLoginProfileSummary[];
   settings: SettingsView;
 }
