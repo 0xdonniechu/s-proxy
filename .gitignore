@@ -1,0 +1,21 @@
+# Session & agent local files
+HANDOFF.md
+.gemini/settings.local.json
+.agents/settings.local.json
+.claude/settings.local.json
+
+# Build outputs & dependencies
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+
+# Secrets, VPN configs & credentials (never commit)
+.env
+.env.*
+*.conf
+*.ovpn
+*.key
+*.pem
+secrets/
+state.json
