@@ -143,6 +143,8 @@ pub struct ProxySlotConfig {
     pub name: String,
     pub port: u16,
     pub mode: SlotMode,
+    #[serde(default)]
+    pub provider: crate::providers::VpnProvider,
     pub location_id: String,
     pub country_code: String,
     pub location_label: String,
@@ -161,6 +163,7 @@ impl Default for ProxySlotConfig {
             name: "Surfshark App Bridge".to_string(),
             port: DEFAULT_BASE_PORT,
             mode: SlotMode::AdapterBridge,
+            provider: crate::providers::VpnProvider::Surfshark,
             location_id: String::new(),
             country_code: "VPN".to_string(),
             location_label: "Active Surfshark Adapter".to_string(),
@@ -179,6 +182,8 @@ impl Default for ProxySlotConfig {
 pub struct PersistedState {
     pub settings: AppSettings,
     pub slots: Vec<ProxySlotConfig>,
+    #[serde(default)]
+    pub providers: Vec<crate::providers::ProviderConfig>,
 }
 
 impl Default for PersistedState {
@@ -186,6 +191,10 @@ impl Default for PersistedState {
         Self {
             settings: AppSettings::default(),
             slots: vec![ProxySlotConfig::default()],
+            providers: crate::providers::VpnProvider::all()
+                .into_iter()
+                .map(crate::providers::ProviderConfig::for_provider)
+                .collect(),
         }
     }
 }
@@ -240,14 +249,7 @@ impl AppSettings {
         if !(1024..=65000).contains(&payload.base_port) {
             return Err("Base port must be between 1024 and 65000".to_string());
         }
-        let addr_trimmed = payload.wg_address.trim();
-        if addr_trimmed.is_empty() {
-            return Err("WireGuard tunnel address cannot be empty".to_string());
-        }
-        let addr_ip_part = addr_trimmed.split('/').next().unwrap_or("");
-        if addr_ip_part.parse::<Ipv4Addr>().is_err() {
-            return Err(format!("Invalid WireGuard IPv4 address: {addr_trimmed}"));
-        }
+        let validated_addr = validate_wg_address_cidr(&payload.wg_address)?;
 
         let dns_trimmed = payload.wg_dns.trim();
         let first_dns = dns_trimmed.split(',').next().unwrap_or("").trim();
@@ -272,7 +274,7 @@ impl AppSettings {
             }
         }
 
-        self.wg_address = addr_trimmed.to_string();
+        self.wg_address = validated_addr;
         self.wg_dns = first_dns.to_string();
         self.base_port = payload.base_port;
         self.allow_lan = payload.allow_lan;
@@ -288,6 +290,32 @@ impl AppSettings {
         self.auto_verify_ip = payload.auto_verify_ip;
         Ok(())
     }
+}
+
+pub fn validate_wg_address_cidr(address: &str) -> Result<String, String> {
+    let trimmed = address.trim();
+    if trimmed.is_empty() {
+        return Err("WireGuard tunnel address cannot be empty".to_string());
+    }
+    let (ip_str, prefix) = match trimmed.split_once('/') {
+        Some((ip_part, prefix_part)) => {
+            if prefix_part.is_empty() || !prefix_part.chars().all(|c| c.is_ascii_digit()) {
+                return Err(format!("Invalid CIDR prefix in WireGuard address: {trimmed}"));
+            }
+            let p: u8 = prefix_part
+                .parse()
+                .map_err(|_| format!("Invalid CIDR prefix in WireGuard address: {trimmed}"))?;
+            if p > 32 {
+                return Err(format!("CIDR prefix out of range (0..=32): {trimmed}"));
+            }
+            (ip_part, p)
+        }
+        None => (trimmed, 32),
+    };
+    let ip: Ipv4Addr = ip_str
+        .parse()
+        .map_err(|_| format!("Invalid WireGuard IPv4 address: {trimmed}"))?;
+    Ok(format!("{ip}/{prefix}"))
 }
 
 pub fn validate_wg_key_format(key: &str) -> Result<(), String> {
@@ -356,9 +384,19 @@ pub fn parse_wg_conf(raw: &str) -> Result<ParsedWgConf, String> {
                     }
                 }
                 "endpoint" => {
-                    let host = val.split(':').next().unwrap_or("").trim();
-                    if !host.is_empty() {
-                        endpoint_host = Some(host.to_string());
+                    let clean_ep = val.trim();
+                    if let Some((host, port)) = clean_ep.split_once(':') {
+                        let h = host.trim();
+                        let p = port.trim();
+                        if !h.is_empty() {
+                            if p == "51820" || p.is_empty() {
+                                endpoint_host = Some(h.to_string());
+                            } else {
+                                endpoint_host = Some(format!("{h}:{p}"));
+                            }
+                        }
+                    } else if !clean_ep.is_empty() {
+                        endpoint_host = Some(clean_ep.to_string());
                     }
                 }
                 _ => {}
@@ -370,11 +408,16 @@ pub fn parse_wg_conf(raw: &str) -> Result<ParsedWgConf, String> {
     if let Some(ref pk) = public_key {
         validate_wg_key_format(pk)?;
     }
+    let validated_addr = validate_wg_address_cidr(&address)?;
+    let first_dns = dns.split(',').next().unwrap_or("").trim();
+    if first_dns.parse::<Ipv4Addr>().is_err() {
+        return Err(format!("Invalid WireGuard DNS IPv4 address: {dns}"));
+    }
 
     Ok(ParsedWgConf {
         private_key,
-        address,
-        dns,
+        address: validated_addr,
+        dns: first_dns.to_string(),
         public_key,
         endpoint_host,
     })
@@ -392,6 +435,33 @@ pub fn state_file_path() -> PathBuf {
     app_data_dir().join("state.json")
 }
 
+pub fn ensure_all_providers(state: &mut PersistedState) {
+    for p in crate::providers::VpnProvider::all() {
+        if !state.providers.iter().any(|c| c.provider == p) {
+            state
+                .providers
+                .push(crate::providers::ProviderConfig::for_provider(p));
+        }
+    }
+    if let Some(surf) = state
+        .providers
+        .iter_mut()
+        .find(|c| c.provider == crate::providers::VpnProvider::Surfshark)
+    {
+        if surf.private_key.is_empty() && !state.settings.wg_private_key.is_empty() {
+            surf.private_key = state.settings.wg_private_key.clone();
+        } else if state.settings.wg_private_key.is_empty() && !surf.private_key.is_empty() {
+            state.settings.wg_private_key = surf.private_key.clone();
+        }
+        if !state.settings.wg_address.is_empty() {
+            surf.address = state.settings.wg_address.clone();
+        }
+        if !state.settings.wg_dns.is_empty() {
+            surf.dns = state.settings.wg_dns.clone();
+        }
+    }
+}
+
 pub fn load_state_from_path(path: &Path) -> PersistedState {
     let Ok(raw) = fs::read_to_string(path) else {
         return PersistedState::default();
@@ -400,6 +470,7 @@ pub fn load_state_from_path(path: &Path) -> PersistedState {
     if state.slots.is_empty() {
         state.slots.push(ProxySlotConfig::default());
     }
+    ensure_all_providers(&mut state);
     state
 }
 

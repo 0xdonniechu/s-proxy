@@ -214,15 +214,53 @@ pub fn update_gologin_profile_proxy_blocking(
     Ok(())
 }
 
+fn parse_geo_json(raw: &str) -> Option<(String, String, String, String)> {
+    let val = serde_json::from_str::<serde_json::Value>(raw).ok()?;
+    if val.get("success").and_then(|v| v.as_bool()) == Some(false) {
+        return None;
+    }
+    let ip = val.get("ip")?.as_str()?.trim().to_string();
+    if ip.is_empty() {
+        return None;
+    }
+    let country = val
+        .get("country_code")
+        .or_else(|| val.get("country"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let city = val
+        .get("city")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let org = val
+        .get("org")
+        .and_then(|v| v.as_str())
+        .or_else(|| {
+            val.get("connection")
+                .and_then(|c| c.get("org").or_else(|| c.get("isp")))
+                .and_then(|v| v.as_str())
+        })
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    Some((ip, country, city, org))
+}
+
 pub fn detect_host_isp_ip_blocking() -> Option<String> {
-    let cfg = "url = \"https://ipinfo.io/json\"\n";
-    if let Ok(raw) = run_curl_with_config(cfg, &["--max-time", "5"]) {
-        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&raw) {
-            if let Some(ip) = val.get("ip").and_then(|v| v.as_str()) {
-                let trimmed = ip.trim();
-                if !trimmed.is_empty() {
-                    return Some(trimmed.to_string());
-                }
+    let endpoints = [
+        "https://ipwho.is/",
+        "https://ipinfo.io/json",
+        "https://api.ipify.org?format=json",
+    ];
+    for url in endpoints {
+        let cfg = format!("url = \"{url}\"\n");
+        if let Ok(raw) = run_curl_with_config(&cfg, &["--max-time", "5"]) {
+            if let Some((ip, _, _, _)) = parse_geo_json(&raw) {
+                return Some(ip);
             }
         }
     }
@@ -230,73 +268,58 @@ pub fn detect_host_isp_ip_blocking() -> Option<String> {
 }
 
 pub fn check_slot_egress_blocking(local_port: u16, host_isp_ip: Option<&str>) -> EgressCheckResult {
-    let started = Instant::now();
     let now_epoch = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
-    let cfg = format!(
-        "url = \"https://ipinfo.io/json\"\n\
-         proxy = \"socks5h://127.0.0.1:{local_port}\"\n"
-    );
+    let endpoints = [
+        "https://ipwho.is/",
+        "https://ipinfo.io/json",
+        "https://api.ipify.org?format=json",
+    ];
+    let mut last_error = "All IP check endpoints failed or rate-limited".to_string();
 
-    match run_curl_with_config(&cfg, &["--max-time", "10"]) {
-        Ok(raw) => {
-            let latency_ms = started.elapsed().as_millis() as u64;
-            let Ok(val) = serde_json::from_str::<serde_json::Value>(&raw) else {
-                return EgressCheckResult {
-                    leak_status: LeakStatus::Error,
-                    checked_at_epoch_s: now_epoch,
-                    error_message: "Invalid JSON response from ipinfo.io".to_string(),
-                    ..Default::default()
-                };
-            };
-            let exit_ip = val
-                .get("ip")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .trim()
-                .to_string();
-            let country = val
-                .get("country")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let city = val
-                .get("city")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let org = val
-                .get("org")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let leak_status = evaluate_leak_status(&exit_ip, host_isp_ip);
-            let error_message = if leak_status == LeakStatus::LeakBlocked {
-                "CRITICAL: Proxy exit IP matches Host ISP IP! Slot blocked.".to_string()
-            } else {
-                String::new()
-            };
-
-            EgressCheckResult {
-                exit_ip,
-                country,
-                city,
-                org,
-                latency_ms,
-                leak_status,
-                checked_at_epoch_s: now_epoch,
-                error_message,
+    for url in endpoints {
+        let started = Instant::now();
+        let cfg = format!(
+            "url = \"{url}\"\n\
+             proxy = \"socks5h://127.0.0.1:{local_port}\"\n"
+        );
+        match run_curl_with_config(&cfg, &["--max-time", "8"]) {
+            Ok(raw) => {
+                let latency_ms = started.elapsed().as_millis() as u64;
+                if let Some((exit_ip, country, city, org)) = parse_geo_json(&raw) {
+                    let leak_status = evaluate_leak_status(&exit_ip, host_isp_ip);
+                    let error_message = if leak_status == LeakStatus::LeakBlocked {
+                        "CRITICAL: Proxy exit IP matches Host ISP IP! Slot blocked.".to_string()
+                    } else {
+                        String::new()
+                    };
+                    return EgressCheckResult {
+                        exit_ip,
+                        country,
+                        city,
+                        org,
+                        latency_ms,
+                        leak_status,
+                        checked_at_epoch_s: now_epoch,
+                        error_message,
+                    };
+                }
+                last_error = format!("Rate limit or invalid response from {url}");
+            }
+            Err(err) => {
+                last_error = err;
             }
         }
-        Err(err) => EgressCheckResult {
-            leak_status: LeakStatus::Error,
-            checked_at_epoch_s: now_epoch,
-            error_message: err,
-            ..Default::default()
-        },
+    }
+
+    EgressCheckResult {
+        leak_status: LeakStatus::Error,
+        checked_at_epoch_s: now_epoch,
+        error_message: last_error,
+        ..Default::default()
     }
 }
 

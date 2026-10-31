@@ -1234,6 +1234,96 @@ table.data-table tr:last-child td {
   color: var(--text-primary);
 }
 
+/* 12. View 6: Multi-Provider VPN Hub */
+.providers-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.provider-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 22px 24px;
+  border: 1px solid transparent;
+}
+
+.provider-card.is-ready {
+  border-color: rgba(37, 99, 235, 0.22);
+}
+
+.provider-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.provider-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.provider-logo-badge {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+  color: #FFFFFF;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.prov-surfshark {
+  background-color: #168A9E;
+}
+
+.prov-nordvpn {
+  background-color: #3E5FFF;
+}
+
+.prov-mullvad {
+  background-color: #294D73;
+}
+
+.prov-protonvpn {
+  background-color: #6D4AFF;
+}
+
+.prov-custom {
+  background-color: #151922;
+}
+
+.provider-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.provider-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.provider-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* Modals */
 .modal-backdrop {
   position: fixed;

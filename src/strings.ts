@@ -5,6 +5,7 @@ export interface I18nStrings {
     proxyHub: string;
     statusTab: string;
     surfsharkCatalog: string;
+    providersTab: string;
     gologinSync: string;
     settings: string;
   };
@@ -186,6 +187,31 @@ export interface I18nStrings {
     keyConfigured: string;
     keyNotSet: string;
   };
+  providersPage: {
+    title: string;
+    subtitle: string;
+    statusReady: string;
+    statusMissingKey: string;
+    serversAvailable: string;
+    privateKeyLabel: string;
+    privateKeyPlaceholder: string;
+    addressLabel: string;
+    dnsLabel: string;
+    apiTokenLabel: string;
+    apiTokenPlaceholder: string;
+    saveProviderBtn: string;
+    syncCatalogBtn: string;
+    importConfFilesBtn: string;
+    browseServersBtn: string;
+    surfsharkDesc: string;
+    nordvpnDesc: string;
+    mullvadDesc: string;
+    protonvpnDesc: string;
+    customDesc: string;
+    savedToast: string;
+    syncedToast: string;
+    importedToast: string;
+  };
 }
 
 export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
@@ -193,7 +219,8 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
     tabs: {
       proxyHub: "Proxy Hub",
       statusTab: "Trạng thái & Bảo mật",
-      surfsharkCatalog: "Surfshark (180 Máy chủ)",
+      surfsharkCatalog: "Máy chủ VPN",
+      providersTab: "Nhà cung cấp VPN",
       gologinSync: "Đồng bộ GoLogin",
       settings: "Cài đặt",
     },
@@ -375,12 +402,38 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       keyConfigured: "Đã nạp PrivateKey",
       keyNotSet: "Chưa nạp PrivateKey",
     },
+    providersPage: {
+      title: "Nhà cung cấp VPN (Multi-Provider WireGuard Hub)",
+      subtitle: "Kết nối đồng thời Surfshark, NordVPN, Mullvad, ProtonVPN hoặc bất kỳ file .conf WireGuard nào để tạo cổng SOCKS5/HTTP tốc độ cao.",
+      statusReady: "Sẵn sàng",
+      statusMissingKey: "Chưa nạp khóa",
+      serversAvailable: "{count} máy chủ",
+      privateKeyLabel: "WireGuard PrivateKey (Base64)",
+      privateKeyPlaceholder: "Dán khóa riêng WireGuard 44 ký tự...",
+      addressLabel: "Địa chỉ IP Đường hầm (Tunnel IP)",
+      dnsLabel: "Máy chủ DNS Đường hầm",
+      apiTokenLabel: "Access Token / Mã Tài Khoản (Tự động lấy Key & Server)",
+      apiTokenPlaceholder: "Dán Access Token từ trang tài khoản VPN...",
+      saveProviderBtn: "Lưu Cấu hình",
+      syncCatalogBtn: "⟳ Đồng bộ API Máy chủ & Key",
+      importConfFilesBtn: "Nhập File .conf...",
+      browseServersBtn: "Xem Máy chủ →",
+      surfsharkDesc: "Tự động đọc 180 cụm máy chủ Surfshark toàn cầu. Dán PrivateKey hoặc chọn file .conf tải từ my.surfshark.com.",
+      nordvpnDesc: "Hỗ trợ NordLynx WireGuard: Dán Access Token (từ my.nordaccount.com) rồi bấm 'Đồng bộ API' để tự lấy PrivateKey và 300+ máy chủ NordVPN.",
+      mullvadDesc: "Bấm 'Đồng bộ API' để tải toàn bộ danh sách máy chủ Mullvad toàn cầu, sau đó nạp file .conf hoặc nhập PrivateKey + Tunnel IP.",
+      protonvpnDesc: "Tải các file cấu hình WireGuard (.conf) từ trang quản trị ProtonVPN và bấm 'Nhập File .conf...' (hỗ trợ chọn nhiều file cùng lúc).",
+      customDesc: "Tích hợp bất kỳ nhà cung cấp VPN nào khác (Windscribe, IVPN, PIA, Cloudflare WARP, VPS riêng) bằng cách nhập các file .conf chuẩn WireGuard.",
+      savedToast: "Đã lưu cấu hình nhà cung cấp VPN!",
+      syncedToast: "Đã đồng bộ danh sách máy chủ & khóa thành công!",
+      importedToast: "Đã nhập cấu hình .conf thành công!",
+    },
   },
   en: {
     tabs: {
       proxyHub: "Proxy Hub",
       statusTab: "Status & Security",
-      surfsharkCatalog: "Surfshark (180 Servers)",
+      surfsharkCatalog: "VPN Locations",
+      providersTab: "VPN Providers",
       gologinSync: "GoLogin Sync",
       settings: "Settings",
     },
@@ -561,6 +614,31 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       activeSlotsCount: "{running} / {total} slots running",
       keyConfigured: "PrivateKey Ready",
       keyNotSet: "PrivateKey Missing",
+    },
+    providersPage: {
+      title: "VPN Providers (Multi-Provider WireGuard Hub)",
+      subtitle: "Configure Surfshark, NordVPN, Mullvad, ProtonVPN, or import custom WireGuard .conf files to spawn parallel SOCKS5/HTTP proxy slots.",
+      statusReady: "Ready",
+      statusMissingKey: "Key Not Set",
+      serversAvailable: "{count} servers",
+      privateKeyLabel: "WireGuard PrivateKey (Base64)",
+      privateKeyPlaceholder: "Paste 44-char base64 WireGuard PrivateKey...",
+      addressLabel: "Tunnel Interface Address",
+      dnsLabel: "Tunnel DNS Server",
+      apiTokenLabel: "Access Token (Auto-fetch PrivateKey & Servers)",
+      apiTokenPlaceholder: "Paste Access Token from provider account...",
+      saveProviderBtn: "Save Provider",
+      syncCatalogBtn: "⟳ Sync API & Servers",
+      importConfFilesBtn: "Import .conf File(s)...",
+      browseServersBtn: "Browse Servers →",
+      surfsharkDesc: "Auto-loads 180 Surfshark locations worldwide. Paste your WireGuard PrivateKey or import any downloaded .conf file.",
+      nordvpnDesc: "NordLynx WireGuard: Paste your NordVPN Access Token and click 'Sync API & Servers' to auto-fetch your PrivateKey and 300+ servers.",
+      mullvadDesc: "Click 'Sync API & Servers' to fetch all global Mullvad WireGuard relays, then import a .conf file or enter your PrivateKey + Address.",
+      protonvpnDesc: "Download WireGuard .conf files from your ProtonVPN dashboard and click 'Import .conf File(s)...' (supports selecting multiple files).",
+      customDesc: "Use any WireGuard-compatible VPN (Windscribe, PIA, IVPN, Cloudflare WARP, or self-hosted VPS) by importing one or more .conf files.",
+      savedToast: "Provider configuration saved!",
+      syncedToast: "Provider catalog & credentials synchronized!",
+      importedToast: "Imported WireGuard .conf file(s) successfully!",
     },
   },
 };
