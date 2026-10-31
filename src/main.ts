@@ -71,6 +71,12 @@ export function showToast(message: string, durationMs = 3200): void {
   }, durationMs);
 }
 
+// Crisp Flag Badge Helper (28x20px styled badge)
+function renderFlagBadge(countryCode: string): string {
+  const code = (countryCode || "UN").toUpperCase();
+  return `<span class="flag-badge" aria-label="${escapeHtml(code)}">${escapeHtml(code)}</span>`;
+}
+
 // IPC helper wrappers
 async function fetchSnapshot(): Promise<void> {
   try {
@@ -340,66 +346,54 @@ async function copyToClipboard(text: string, label: string): Promise<void> {
   }
 }
 
-// Rendering components
-function renderTopBar(snap: HubSnapshot): string {
+// 1. Sidebar Rail Component
+function renderSidebarRail(): string {
   const strings = getStrings();
-  const surf = snap.surfsharkAdapter;
-  const isSurfConnected = surf && surf.statusUp && !surf.ipv4.startsWith("169.254.") && surf.ipv4 !== "";
-  const isWireproxyReady = snap.settings.wireproxyReady;
-
   return `
-    <header class="top-bar">
-      <div class="brand-row">
-        <div class="brand-logo" aria-hidden="true">
-          <svg viewBox="0 0 256 256" width="36" height="36" fill="none">
-            <path d="M65 36 C82 9 116 0 158 2 C194 4 216 14 221 42 C226 74 229 124 224 156 C220 182 197 205 154 226 C112 246 72 256 48 254 C30 252 27 230 31 196 C37 148 50 64 65 36 Z" fill="#168A9E"/>
-            <path d="M102 172 A22 22 0 0 0 124 150 L124 80 A18 18 0 0 1 142 62 L149 62 A27 32 0 0 1 149 126 L124 126" stroke="#FFFFFF" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="brand">
-          <span class="brand-title">s-proxy</span>
-          <span class="brand-subtitle">${escapeHtml(strings.header.brandSubtitle)}</span>
-        </div>
+    <aside class="sidebar-rail">
+      <div class="sidebar-logo" title="s-proxy Hub">
+        <svg viewBox="0 0 256 256" width="36" height="36" fill="none">
+          <path d="M65 36 C82 9 116 0 158 2 C194 4 216 14 221 42 C226 74 229 124 224 156 C220 182 197 205 154 226 C112 246 72 256 48 254 C30 252 27 230 31 196 C37 148 50 64 65 36 Z" fill="#168A9E"/>
+          <path d="M102 172 A22 22 0 0 0 124 150 L124 80 A18 18 0 0 1 142 62 L149 62 A27 32 0 0 1 149 126 L124 126" stroke="#FFFFFF" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
       </div>
-      <div class="status-pills">
-        <div class="pill ${snap.hostIspIp ? "pill-safe" : "pill-warn"}">
-          <span class="pill-label">${escapeHtml(strings.header.ispIp)}:</span>
-          <span class="mono">${escapeHtml(snap.hostIspIp || "Detecting...")}</span>
-        </div>
-        <div class="pill ${isSurfConnected ? "pill-safe" : "pill-danger"}">
-          <span class="pill-label">${escapeHtml(strings.header.surfsharkAdapter)}:</span>
-          <span>${isSurfConnected ? `${escapeHtml(strings.header.connected)} (${escapeHtml(surf?.ipv4 || "")})` : escapeHtml(strings.header.disconnected)}</span>
-        </div>
-        <div class="pill ${isWireproxyReady ? "pill-safe" : "pill-warn"}">
-          <span class="pill-label">${escapeHtml(strings.header.wireproxyCore)}:</span>
-          <span>${isWireproxyReady ? escapeHtml(strings.header.ready) : escapeHtml(strings.header.missing)}</span>
-        </div>
-        <div class="lang-switch" role="group" aria-label="Language">
+
+      <nav class="sidebar-nav">
+        <button type="button" class="nav-btn tab-btn ${activeTab === "hub" ? "active" : ""}" data-tab="hub" title="${escapeHtml(strings.tabs.proxyHub)}">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </button>
+        <button type="button" class="nav-btn tab-btn ${activeTab === "catalog" ? "active" : ""}" data-tab="catalog" title="${escapeHtml(strings.tabs.surfsharkCatalog)}">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        </button>
+        <button type="button" class="nav-btn tab-btn ${activeTab === "gologin" ? "active" : ""}" data-tab="gologin" title="${escapeHtml(strings.tabs.gologinSync)}">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <line x1="2" y1="9" x2="22" y2="9"/>
+            <line x1="6" y1="6" x2="6.01" y2="6"/>
+            <line x1="10" y1="6" x2="10.01" y2="6"/>
+          </svg>
+        </button>
+        <button type="button" class="nav-btn tab-btn ${activeTab === "settings" ? "active" : ""}" data-tab="settings" title="${escapeHtml(strings.tabs.settings)}">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="lang-switch-rail" role="group" aria-label="Language">
           <button type="button" class="lang-btn ${currentLanguage === "en" ? "active" : ""}" data-lang="en">EN</button>
           <button type="button" class="lang-btn ${currentLanguage === "vi" ? "active" : ""}" data-lang="vi">VI</button>
         </div>
       </div>
-    </header>
-  `;
-}
-
-function renderTabBar(): string {
-  const strings = getStrings();
-  return `
-    <nav class="tab-bar">
-      <button class="tab-btn ${activeTab === "hub" ? "active" : ""}" data-tab="hub">
-        ${escapeHtml(strings.tabs.proxyHub)}
-      </button>
-      <button class="tab-btn ${activeTab === "catalog" ? "active" : ""}" data-tab="catalog">
-        ${escapeHtml(strings.tabs.surfsharkCatalog)}
-      </button>
-      <button class="tab-btn ${activeTab === "gologin" ? "active" : ""}" data-tab="gologin">
-        ${escapeHtml(strings.tabs.gologinSync)}
-      </button>
-      <button class="tab-btn ${activeTab === "settings" ? "active" : ""}" data-tab="settings">
-        ${escapeHtml(strings.tabs.settings)}
-      </button>
-    </nav>
+    </aside>
   `;
 }
 
@@ -435,12 +429,16 @@ function renderLeakBadge(slot: ProxySlotView): string {
   }
 }
 
+// 2. View 1: Proxy Hub Tab
 function renderHubTab(snap: HubSnapshot): string {
   const strings = getStrings();
+  const surf = snap.surfsharkAdapter;
+  const isSurfConnected = surf && surf.statusUp && !surf.ipv4.startsWith("169.254.") && surf.ipv4 !== "";
+  const isWireproxyReady = snap.settings.wireproxyReady;
 
-  const slotRows =
+  const slotCards =
     snap.slots.length === 0
-      ? `<tr><td colspan="7" class="empty-state">${escapeHtml(strings.hub.emptySlots)}</td></tr>`
+      ? `<div class="empty-card">${escapeHtml(strings.hub.emptySlots)}</div>`
       : snap.slots
           .map((slot) => {
             const isRunning = slot.status === "running";
@@ -457,80 +455,82 @@ function renderHubTab(snap: HubSnapshot): string {
               .join("");
 
             const egressInfo = slot.egress
-              ? `<div class="egress-info">
-                   <div class="mono"><strong>${escapeHtml(slot.egress.exitIp)}</strong></div>
-                   <div class="subtext">${escapeHtml(slot.egress.city ? `${slot.egress.city}, ` : "")}${escapeHtml(slot.egress.country)} &bull; ${slot.egress.latencyMs}ms</div>
-                   <div>${renderLeakBadge(slot)}</div>
-                 </div>`
-              : `<div class="subtext">${escapeHtml(strings.status.leakUnchecked)}</div>`;
+              ? `<span class="mono bold">${escapeHtml(slot.egress.exitIp)}</span>
+                 <span class="subtext">${escapeHtml(slot.egress.city ? `${slot.egress.city}, ` : "")}${escapeHtml(slot.egress.country)} &bull; ${slot.egress.latencyMs}ms</span>`
+              : `<span class="subtext">${escapeHtml(strings.status.leakUnchecked)}</span>`;
+
+            const iconBadgeText =
+              slot.mode === "adapter_bridge"
+                ? "⚡"
+                : `🌐 ${escapeHtml(slot.countryCode || "")}`;
 
             return `
-              <tr data-slot-id="${escapeHtml(slot.id)}">
-                <td>
-                  <div class="slot-name-cell">
-                    <strong>${escapeHtml(slot.name)}</strong>
-                    <div class="subtext mono">${escapeHtml(slot.connectionName || slot.boundAdapterName || slot.adapterHint || "auto")}</div>
+              <div class="surf-card slot-card" data-slot-id="${escapeHtml(slot.id)}">
+                <div class="slot-block-left">
+                  <div class="dark-icon-badge" title="${slot.mode === "adapter_bridge" ? "Adapter Bridge" : "Multi-VPN"}">
+                    ${iconBadgeText}
                   </div>
-                </td>
-                <td>
-                  <span class="badge ${slot.mode === "adapter_bridge" ? "badge-running" : "badge-safe"}">
-                    ${slot.mode === "adapter_bridge" ? escapeHtml(strings.status.modeAdapterBridge) : escapeHtml(strings.status.modeUserspaceWg)}
-                  </span>
-                </td>
-                <td>
-                  <div class="endpoint-cell">
-                    <span class="mono">${escapeHtml(slot.listenHost)}:${slot.port}</span>
-                    <div class="btn-group-sm">
-                      <button class="btn btn-sm btn-secondary btn-copy" data-copy="${escapeHtml(slot.socks5Uri)}" data-label="SOCKS5">
-                        ${escapeHtml(strings.hub.copySocks5)}
-                      </button>
-                      <button class="btn btn-sm btn-secondary btn-copy" data-copy="${escapeHtml(slot.httpUri)}" data-label="HTTP">
-                        ${escapeHtml(strings.hub.copyHttp)}
-                      </button>
+                  <div class="slot-left-info">
+                    <div class="slot-name">${escapeHtml(slot.name)}</div>
+                    <div class="slot-subtext subtext">
+                      <span class="mono">${escapeHtml(slot.listenHost)}:${slot.port}</span>
+                      <span class="bullet">&bull;</span>
+                      <span class="badge ${slot.mode === "adapter_bridge" ? "badge-running" : "badge-safe"}">
+                        ${slot.mode === "adapter_bridge" ? escapeHtml(strings.status.modeAdapterBridge) : escapeHtml(strings.status.modeUserspaceWg)}
+                      </span>
+                      <span class="bullet">&bull;</span>
+                      <span class="mono">${escapeHtml(slot.connectionName || slot.boundAdapterName || slot.adapterHint || "auto")}</span>
                     </div>
                   </div>
-                </td>
-                <td>
-                  <div class="status-cell">
+                </div>
+
+                <div class="slot-block-egress">
+                  <div class="egress-top-row">
                     ${renderStatusBadge(slot.status)}
-                    <div class="subtext" title="${escapeHtml(slot.statusDetail)}">${escapeHtml(slot.statusDetail)}</div>
+                    ${renderLeakBadge(slot)}
                     ${
                       isRunning
-                        ? `<div class="traffic-text mono">${slot.activeConnections} conn &bull; ${formatBytes(slot.bytesTransferred)}</div>`
+                        ? `<span class="traffic-text mono">${slot.activeConnections} conn &bull; ${formatBytes(slot.bytesTransferred)}</span>`
                         : ""
                     }
                   </div>
-                </td>
-                <td>
-                  <div class="egress-cell">
+                  <div class="egress-ip-row">
                     ${egressInfo}
-                    <button class="btn btn-sm btn-secondary btn-check-ip" data-slot-id="${escapeHtml(slot.id)}" ${!isRunning ? "disabled" : ""}>
+                  </div>
+                </div>
+
+                <div class="slot-block-gologin">
+                  <select class="select-input select-hub-profile" data-slot-id="${escapeHtml(slot.id)}">
+                    <option value="">${escapeHtml(strings.hub.selectProfilePrompt)}</option>
+                    ${profileOptions}
+                  </select>
+                  <button type="button" class="btn btn-secondary btn-sm btn-hub-sync" data-slot-id="${escapeHtml(slot.id)}">
+                    ${escapeHtml(strings.hub.sync)}
+                  </button>
+                </div>
+
+                <div class="slot-block-actions">
+                  <div class="btn-group-sm">
+                    <button type="button" class="btn btn-sm btn-secondary btn-copy" data-copy="${escapeHtml(slot.socks5Uri)}" data-label="SOCKS5">
+                      ${escapeHtml(strings.hub.copySocks5)}
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary btn-copy" data-copy="${escapeHtml(slot.httpUri)}" data-label="HTTP">
+                      ${escapeHtml(strings.hub.copyHttp)}
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary btn-check-ip" data-slot-id="${escapeHtml(slot.id)}" ${!isRunning ? "disabled" : ""}>
                       ${escapeHtml(strings.hub.checkIp)}
                     </button>
                   </div>
-                </td>
-                <td>
-                  <div class="gologin-cell">
-                    <select class="select-input select-hub-profile" data-slot-id="${escapeHtml(slot.id)}">
-                      <option value="">${escapeHtml(strings.hub.selectProfilePrompt)}</option>
-                      ${profileOptions}
-                    </select>
-                    <button class="btn btn-sm btn-secondary btn-hub-sync" data-slot-id="${escapeHtml(slot.id)}">
-                      ${escapeHtml(strings.hub.sync)}
-                    </button>
-                  </div>
-                </td>
-                <td>
-                  <div class="slot-actions">
-                    <button class="btn btn-sm ${isRunning ? "btn-danger" : "btn-primary"} btn-toggle-slot" data-slot-id="${escapeHtml(slot.id)}" data-start="${!isRunning}">
+                  <div class="btn-group-sm">
+                    <button type="button" class="btn btn-sm ${isRunning ? "btn-danger" : "btn-primary"} btn-toggle-slot" data-slot-id="${escapeHtml(slot.id)}" data-start="${!isRunning}">
                       ${isRunning ? escapeHtml(strings.hub.stop) : escapeHtml(strings.hub.start)}
                     </button>
-                    <button class="btn btn-sm btn-danger btn-delete-slot" data-slot-id="${escapeHtml(slot.id)}">
+                    <button type="button" class="btn btn-sm btn-danger btn-delete-slot" data-slot-id="${escapeHtml(slot.id)}">
                       ${escapeHtml(strings.hub.delete)}
                     </button>
                   </div>
-                </td>
-              </tr>
+                </div>
+              </div>
             `;
           })
           .join("");
@@ -578,22 +578,22 @@ function renderHubTab(snap: HubSnapshot): string {
           <h3>${escapeHtml(strings.hub.modalCreateTitle)}</h3>
           <form id="create-bridge-form">
             <div class="form-group">
-              <label>${escapeHtml(strings.hub.slotNameLabel)}</label>
+              <label for="bridge-slot-name">${escapeHtml(strings.hub.slotNameLabel)}</label>
               <input type="text" id="bridge-slot-name" class="text-input" placeholder="Surfshark Bridge" />
             </div>
             <div class="form-group">
-              <label>${escapeHtml(strings.hub.slotPortLabel)}</label>
+              <label for="bridge-slot-port">${escapeHtml(strings.hub.slotPortLabel)}</label>
               <input type="number" id="bridge-slot-port" class="text-input" placeholder="${snap.settings.basePort}" min="1024" max="65535" />
               <div class="subtext">${escapeHtml(strings.hub.slotPortHint)}</div>
             </div>
             <div class="form-group">
-              <label>${escapeHtml(strings.hub.adapterHintLabel)}</label>
+              <label for="bridge-slot-adapter">${escapeHtml(strings.hub.adapterHintLabel)}</label>
               <input type="text" id="bridge-slot-adapter" class="text-input" placeholder="${escapeHtml(strings.hub.adapterHintPlaceholder)}" />
             </div>
             <div class="form-group checkbox-group">
-              <label>
+              <label class="checkbox-label">
                 <input type="checkbox" id="bridge-slot-autostart" checked />
-                ${escapeHtml(strings.hub.autoStartLabel)}
+                <span>${escapeHtml(strings.hub.autoStartLabel)}</span>
               </label>
             </div>
             <div class="btn-group-right">
@@ -615,24 +615,24 @@ function renderHubTab(snap: HubSnapshot): string {
           <h3>${escapeHtml(strings.hub.modalCreateMultiTitle)}</h3>
           <form id="create-multi-form">
             <div class="form-group">
-              <label>${escapeHtml(strings.hub.selectServerLabel)}</label>
+              <label for="multi-slot-location">${escapeHtml(strings.hub.selectServerLabel)}</label>
               <select id="multi-slot-location" class="select-input" required>
                 ${multiServerOptions}
               </select>
             </div>
             <div class="form-group">
-              <label>${escapeHtml(strings.hub.slotNameLabel)}</label>
+              <label for="multi-slot-name">${escapeHtml(strings.hub.slotNameLabel)}</label>
               <input type="text" id="multi-slot-name" class="text-input" placeholder="Auto-filled from server" />
             </div>
             <div class="form-group">
-              <label>${escapeHtml(strings.hub.slotPortLabel)}</label>
+              <label for="multi-slot-port">${escapeHtml(strings.hub.slotPortLabel)}</label>
               <input type="number" id="multi-slot-port" class="text-input" placeholder="${snap.settings.basePort + 1}" min="1024" max="65535" />
               <div class="subtext">${escapeHtml(strings.hub.slotPortHint)}</div>
             </div>
             <div class="form-group checkbox-group">
-              <label>
+              <label class="checkbox-label">
                 <input type="checkbox" id="multi-slot-autostart" checked />
-                ${escapeHtml(strings.hub.autoStartLabel)}
+                <span>${escapeHtml(strings.hub.autoStartLabel)}</span>
               </label>
             </div>
             <div class="btn-group-right">
@@ -650,79 +650,101 @@ function renderHubTab(snap: HubSnapshot): string {
       : "";
 
   return `
-    <div class="panel">
-      <div class="toolbar">
-        <button class="btn btn-primary" id="btn-open-create-bridge">
+    <!-- Top Status Banner Card -->
+    <div class="surf-card hub-status-banner">
+      <div class="banner-indicators">
+        <div class="indicator-item">
+          <span class="indicator-label">${escapeHtml(strings.header.surfsharkAdapter)}</span>
+          <div class="indicator-value">
+            <span class="status-dot ${isSurfConnected ? "dot-online" : "dot-offline"}"></span>
+            <span class="bold">${isSurfConnected ? `${escapeHtml(strings.header.connected)} (${escapeHtml(surf?.ipv4 || "")})` : escapeHtml(strings.header.disconnected)}</span>
+          </div>
+        </div>
+        <div class="indicator-divider"></div>
+        <div class="indicator-item">
+          <span class="indicator-label">${escapeHtml(strings.header.ispIp)}</span>
+          <div class="indicator-value">
+            <span class="mono bold">${escapeHtml(snap.hostIspIp || "Detecting...")}</span>
+            <span class="badge badge-safe">Protected</span>
+          </div>
+        </div>
+        <div class="indicator-divider"></div>
+        <div class="indicator-item">
+          <span class="indicator-label">${escapeHtml(strings.header.wireproxyCore)}</span>
+          <div class="indicator-value">
+            <span class="status-dot ${isWireproxyReady ? "dot-online" : "dot-warning"}"></span>
+            <span class="bold">${isWireproxyReady ? escapeHtml(strings.header.ready) : escapeHtml(strings.header.missing)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="banner-actions">
+        <button type="button" class="btn btn-primary" id="btn-open-create-bridge">
           ${escapeHtml(strings.hub.addAdapterSlot)}
         </button>
-        <button class="btn btn-primary" id="btn-open-create-multi">
+        <button type="button" class="btn btn-primary" id="btn-open-create-multi">
           ${escapeHtml(strings.hub.addMultiVpnSlot)}
         </button>
-        <button class="btn btn-secondary" id="btn-start-all-slots">
+        <button type="button" class="btn btn-secondary" id="btn-start-all-slots">
           ${escapeHtml(strings.hub.startAll)}
         </button>
-        <button class="btn btn-secondary" id="btn-stop-all-slots">
+        <button type="button" class="btn btn-secondary" id="btn-stop-all-slots">
           ${escapeHtml(strings.hub.stopAll)}
         </button>
-        <button class="btn btn-secondary" id="btn-check-all-ips">
+        <button type="button" class="btn btn-secondary" id="btn-check-all-ips">
           ${escapeHtml(strings.hub.checkAllIps)}
         </button>
-        <button class="btn btn-secondary" id="btn-copy-all-socks5">
+        <button type="button" class="btn btn-secondary" id="btn-copy-all-socks5">
           ${escapeHtml(strings.hub.copyAllSocks5)}
         </button>
-        <button class="btn btn-secondary" id="btn-refresh-system">
-          ${escapeHtml(strings.hub.refreshSystem)}
+        <button type="button" class="btn btn-secondary" id="btn-refresh-system">
+          ⟳ ${escapeHtml(strings.hub.refreshSystem)}
         </button>
       </div>
-
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>${escapeHtml(strings.hub.colSlotName)}</th>
-              <th>${escapeHtml(strings.hub.colMode)}</th>
-              <th>${escapeHtml(strings.hub.colEndpoint)}</th>
-              <th>${escapeHtml(strings.hub.colStatus)}</th>
-              <th>${escapeHtml(strings.hub.colEgress)}</th>
-              <th>${escapeHtml(strings.hub.colGoLogin)}</th>
-              <th>${escapeHtml(strings.hub.colActions)}</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${slotRows}
-          </tbody>
-        </table>
-      </div>
-
-      <div class="section-divider"></div>
-
-      <div class="diagnostics-header">
-        <h4>${escapeHtml(strings.hub.adapterDiagnostics)}</h4>
-        <div class="subtext">${escapeHtml(strings.hub.adapterDiagnosticsDesc)}</div>
-      </div>
-
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>${escapeHtml(strings.hub.colAdapterName)}</th>
-              <th>${escapeHtml(strings.hub.colAdapterDesc)}</th>
-              <th>${escapeHtml(strings.hub.colAdapterIp)}</th>
-              <th>${escapeHtml(strings.hub.colAdapterStatus)}</th>
-              <th>${escapeHtml(strings.hub.colAdapterKind)}</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${adapterRows}
-          </tbody>
-        </table>
-      </div>
-
-      ${modalHtml}
     </div>
+
+    <!-- Active Proxy Slots Section -->
+    <div class="slots-section">
+      <h2 class="section-title">${escapeHtml(strings.hub.slotsTitle)}</h2>
+      <div class="slots-stack">
+        ${slotCards}
+      </div>
+    </div>
+
+    <!-- Network Adapters Collapsible Diagnostics Section -->
+    <details class="adapters-details">
+      <summary class="adapters-summary">
+        <div class="summary-content">
+          <span class="summary-title">${escapeHtml(strings.hub.adapterDiagnostics)}</span>
+          <span class="subtext">${escapeHtml(strings.hub.adapterDiagnosticsDesc)}</span>
+        </div>
+        <span class="summary-chevron">▼</span>
+      </summary>
+      <div class="adapters-content">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>${escapeHtml(strings.hub.colAdapterName)}</th>
+                <th>${escapeHtml(strings.hub.colAdapterDesc)}</th>
+                <th>${escapeHtml(strings.hub.colAdapterIp)}</th>
+                <th>${escapeHtml(strings.hub.colAdapterStatus)}</th>
+                <th>${escapeHtml(strings.hub.colAdapterKind)}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${adapterRows}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+
+    ${modalHtml}
   `;
 }
 
+// 3. View 2: Locations Tab (Surfshark Catalog)
 function renderCatalogTab(snap: HubSnapshot): string {
   const strings = getStrings();
 
@@ -740,43 +762,64 @@ function renderCatalogTab(snap: HubSnapshot): string {
     );
   });
 
-  const rows =
+  // Recommended for you: Fastest (lowest load) & Nearest country (Singapore or lowest load nearby)
+  let fastestLoc: SurfsharkLocation | null = null;
+  let nearestLoc: SurfsharkLocation | null = null;
+
+  if (snap.locations.length > 0) {
+    const sortedByLoad = [...snap.locations].sort((a, b) => a.load - b.load);
+    fastestLoc = sortedByLoad[0] || null;
+
+    const sgLoc = snap.locations.find((l) => l.countryCode === "SG");
+    if (sgLoc && sgLoc.id !== fastestLoc?.id) {
+      nearestLoc = sgLoc;
+    } else {
+      nearestLoc =
+        sortedByLoad.find((l) => l.countryCode !== fastestLoc?.countryCode) ||
+        sortedByLoad[1] ||
+        fastestLoc;
+    }
+  }
+
+  const locationCards =
     filtered.length === 0
-      ? `<tr><td colspan="6" class="empty-state">${escapeHtml(strings.catalog.noServersMatch)}</td></tr>`
+      ? `<div class="empty-card" style="grid-column: 1 / -1;">${escapeHtml(strings.catalog.noServersMatch)}</div>`
       : filtered
           .map((loc: SurfsharkLocation) => {
-            const typeLabel =
-              loc.locationType === "static" ? strings.catalog.staticType : strings.catalog.genericType;
-            const typeBadge =
-              loc.locationType === "static"
-                ? `<span class="badge badge-safe">${escapeHtml(typeLabel)}</span>`
-                : `<span class="badge">${escapeHtml(typeLabel)}</span>`;
-
+            const loadClass = loc.load > 70 ? "load-high" : loc.load > 40 ? "load-med" : "load-low";
             return `
-              <tr>
-                <td><strong>${escapeHtml(loc.country)}</strong> (${escapeHtml(loc.countryCode)})</td>
-                <td>${escapeHtml(loc.location)}</td>
-                <td>${typeBadge}</td>
-                <td>
-                  <div class="load-bar-wrap">
-                    <div class="load-bar" style="width: ${Math.min(loc.load, 100)}%;"></div>
-                    <span class="subtext">${loc.load}%</span>
+              <div class="surf-card location-card">
+                <div class="loc-card-main">
+                  <div class="loc-flag-col">
+                    ${renderFlagBadge(loc.countryCode)}
                   </div>
-                </td>
-                <td class="mono subtext">${escapeHtml(loc.connectionName)}</td>
-                <td>
-                  <button class="btn btn-sm btn-primary btn-create-location-slot" data-loc-id="${escapeHtml(loc.id)}" data-loc-label="${escapeHtml(`${loc.countryCode} • ${loc.country} - ${loc.location}`)}">
+                  <div class="loc-info-col">
+                    <div class="loc-country">${escapeHtml(loc.country)}</div>
+                    <div class="loc-city">${escapeHtml(loc.location)}</div>
+                  </div>
+                  <div class="loc-load-col">
+                    <span class="load-pill ${loadClass}">${loc.load}%</span>
+                  </div>
+                </div>
+                <div class="loc-card-footer">
+                  <span class="mono subtext-sm">${escapeHtml(loc.connectionName)}</span>
+                  <button type="button" class="btn btn-sm btn-primary btn-create-location-slot" data-loc-id="${escapeHtml(loc.id)}" data-loc-label="${escapeHtml(`${loc.countryCode} • ${loc.country} - ${loc.location}`)}">
                     ${escapeHtml(strings.catalog.createAndStart)}
                   </button>
-                </td>
-              </tr>
+                </div>
+              </div>
             `;
           })
           .join("");
 
   return `
-    <div class="panel">
-      <div class="toolbar">
+    <!-- Top Search & Filter Bar -->
+    <div class="catalog-top-row">
+      <div class="search-box">
+        <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#5E6675" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
         <input
           type="search"
           id="catalog-search-input"
@@ -784,48 +827,92 @@ function renderCatalogTab(snap: HubSnapshot): string {
           placeholder="${escapeHtml(strings.catalog.searchPlaceholder)}"
           value="${escapeHtml(catalogSearchQuery)}"
         />
-        <select id="catalog-filter-select" class="select-input">
-          <option value="all" ${catalogFilterType === "all" ? "selected" : ""}>${escapeHtml(strings.catalog.filterAll)}</option>
-          <option value="generic" ${catalogFilterType === "generic" ? "selected" : ""}>${escapeHtml(strings.catalog.filterGeneric)}</option>
-          <option value="static" ${catalogFilterType === "static" ? "selected" : ""}>${escapeHtml(strings.catalog.filterStatic)}</option>
-        </select>
-        <span class="subtext">
-          ${escapeHtml(strings.catalog.serverCount.replace("{count}", String(filtered.length)))}
-        </span>
       </div>
 
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>${escapeHtml(strings.catalog.colCountry)}</th>
-              <th>${escapeHtml(strings.catalog.colCity)}</th>
-              <th>${escapeHtml(strings.catalog.colType)}</th>
-              <th>${escapeHtml(strings.catalog.colLoad)}</th>
-              <th>${escapeHtml(strings.catalog.colServer)}</th>
-              <th>${escapeHtml(strings.catalog.colAction)}</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows}
-          </tbody>
-        </table>
+      <div class="pill-tabs" role="tablist">
+        <button type="button" class="pill-tab catalog-pill-tab ${catalogFilterType === "all" ? "active" : ""}" data-filter="all">
+          ${escapeHtml(strings.catalog.filterAll)}
+        </button>
+        <button type="button" class="pill-tab catalog-pill-tab ${catalogFilterType === "generic" ? "active" : ""}" data-filter="generic">
+          ${escapeHtml(strings.catalog.genericType)}
+        </button>
+        <button type="button" class="pill-tab catalog-pill-tab ${catalogFilterType === "static" ? "active" : ""}" data-filter="static">
+          ${escapeHtml(strings.catalog.filterStatic)}
+        </button>
+      </div>
+
+      <div class="catalog-count-badge">
+        ${escapeHtml(strings.catalog.serverCount.replace("{count}", String(filtered.length)))}
+      </div>
+    </div>
+
+    <!-- Recommended for you Section -->
+    <div class="recommended-section">
+      <div class="section-title-sm">${escapeHtml(strings.catalog.recommendedTitle)}</div>
+      <div class="recommended-grid">
+        ${
+          fastestLoc
+            ? `
+          <div class="surf-card rec-card">
+            <div class="rec-header">
+              <div class="dark-icon-badge">⚡</div>
+              <div class="rec-meta">
+                <span class="rec-title">${escapeHtml(strings.catalog.fastestLocation)}</span>
+                <span class="rec-location">${renderFlagBadge(fastestLoc.countryCode)} <strong>${escapeHtml(fastestLoc.country)}</strong> &bull; ${escapeHtml(fastestLoc.location)}</span>
+              </div>
+              <div class="rec-load-badge">${fastestLoc.load}% load</div>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm btn-create-location-slot" data-loc-id="${escapeHtml(fastestLoc.id)}" data-loc-label="${escapeHtml(`${fastestLoc.countryCode} • ${fastestLoc.country} - ${fastestLoc.location}`)}">
+              ${escapeHtml(strings.catalog.createAndStart)}
+            </button>
+          </div>
+        `
+            : ""
+        }
+        ${
+          nearestLoc
+            ? `
+          <div class="surf-card rec-card">
+            <div class="rec-header">
+              <div class="dark-icon-badge">📍</div>
+              <div class="rec-meta">
+                <span class="rec-title">${escapeHtml(strings.catalog.nearestCountry)}</span>
+                <span class="rec-location">${renderFlagBadge(nearestLoc.countryCode)} <strong>${escapeHtml(nearestLoc.country)}</strong> &bull; ${escapeHtml(nearestLoc.location)}</span>
+              </div>
+              <div class="rec-load-badge">${nearestLoc.load}% load</div>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm btn-create-location-slot" data-loc-id="${escapeHtml(nearestLoc.id)}" data-loc-label="${escapeHtml(`${nearestLoc.countryCode} • ${nearestLoc.country} - ${nearestLoc.location}`)}">
+              ${escapeHtml(strings.catalog.createAndStart)}
+            </button>
+          </div>
+        `
+            : ""
+        }
+      </div>
+    </div>
+
+    <!-- All Locations 3-Column Grid -->
+    <div class="locations-section">
+      <div class="section-title-sm">${escapeHtml(strings.catalog.allLocations)}</div>
+      <div class="locations-grid">
+        ${locationCards}
       </div>
     </div>
   `;
 }
 
+// 4. View 3: GoLogin Sync Tab
 function renderGoLoginTab(snap: HubSnapshot): string {
   const strings = getStrings();
 
-  const rows =
+  const profileCards =
     snap.gologinProfiles.length === 0
-      ? `<tr><td colspan="6" class="empty-state">${escapeHtml(strings.gologin.noProfiles)}</td></tr>`
+      ? `<div class="empty-card" style="grid-column: 1 / -1;">${escapeHtml(strings.gologin.noProfiles)}</div>`
       : snap.gologinProfiles
           .map((prof: GoLoginProfileSummary) => {
             const hasProxy = prof.proxyHost && prof.proxyPort > 0;
             const currentProxyDisplay = hasProxy
-              ? `<span class="mono">${escapeHtml(prof.proxyMode)}://${escapeHtml(prof.proxyHost)}:${prof.proxyPort}</span>`
+              ? `<span class="mono bold">${escapeHtml(prof.proxyMode)}://${escapeHtml(prof.proxyHost)}:${prof.proxyPort}</span>`
               : `<span class="subtext">${escapeHtml(strings.gologin.directNoProxy)}</span>`;
 
             const currentSlotVal = gologinSlotSelection[prof.id] || "";
@@ -841,81 +928,73 @@ function renderGoLoginTab(snap: HubSnapshot): string {
               .join("");
 
             return `
-              <tr data-profile-id="${escapeHtml(prof.id)}">
-                <td><strong>${escapeHtml(prof.name)}</strong></td>
-                <td class="mono subtext">${escapeHtml(prof.id)}</td>
-                <td><span class="badge">${escapeHtml(prof.os)}</span></td>
-                <td>${currentProxyDisplay}</td>
-                <td>
-                  <div class="assign-inputs">
-                    <select class="select-input select-gologin-slot" data-profile-id="${escapeHtml(prof.id)}">
-                      <option value="">${escapeHtml(strings.gologin.selectSlotPrompt)}</option>
-                      ${rowSlotOptions}
-                    </select>
-                    <select class="select-input select-gologin-mode" data-profile-id="${escapeHtml(prof.id)}">
-                      <option value="socks5" ${currentModeVal === "socks5" ? "selected" : ""}>SOCKS5</option>
-                      <option value="http" ${currentModeVal === "http" ? "selected" : ""}>HTTP</option>
-                    </select>
+              <div class="surf-card gologin-profile-card" data-profile-id="${escapeHtml(prof.id)}">
+                <div class="profile-card-header">
+                  <div class="profile-main-info">
+                    <div class="profile-name">${escapeHtml(prof.name)}</div>
+                    <div class="subtext mono">${escapeHtml(prof.id)}</div>
                   </div>
-                </td>
-                <td>
-                  <button class="btn btn-sm btn-primary btn-assign-gologin" data-profile-id="${escapeHtml(prof.id)}">
+                  <span class="badge badge-os">${escapeHtml(prof.os)}</span>
+                </div>
+                <div class="profile-proxy-status">
+                  <span class="subtext-label">${escapeHtml(strings.gologin.colCurrentProxy)}:</span>
+                  ${currentProxyDisplay}
+                </div>
+                <div class="profile-card-actions">
+                  <select class="select-input select-gologin-slot" data-profile-id="${escapeHtml(prof.id)}">
+                    <option value="">${escapeHtml(strings.gologin.selectSlotPrompt)}</option>
+                    ${rowSlotOptions}
+                  </select>
+                  <select class="select-input select-gologin-mode" data-profile-id="${escapeHtml(prof.id)}">
+                    <option value="socks5" ${currentModeVal === "socks5" ? "selected" : ""}>SOCKS5</option>
+                    <option value="http" ${currentModeVal === "http" ? "selected" : ""}>HTTP</option>
+                  </select>
+                  <button type="button" class="btn btn-primary btn-assign-gologin" data-profile-id="${escapeHtml(prof.id)}">
                     ${escapeHtml(strings.gologin.assignBtn)}
                   </button>
-                </td>
-              </tr>
+                </div>
+              </div>
             `;
           })
           .join("");
 
   return `
-    <div class="panel">
-      <div class="toolbar">
-        <button class="btn btn-primary" id="btn-fetch-gologin-profiles">
-          ${escapeHtml(strings.gologin.fetchProfiles)}
-        </button>
+    <div class="surf-card gologin-top-card">
+      <div class="gologin-top-left">
+        <h2 class="section-title" style="margin-bottom: 4px;">${escapeHtml(strings.gologin.title)}</h2>
         <span class="subtext">${escapeHtml(strings.gologin.fetchHint)}</span>
       </div>
+      <button type="button" class="btn btn-primary" id="btn-fetch-gologin-profiles">
+        ${escapeHtml(strings.gologin.fetchProfiles)}
+      </button>
+    </div>
 
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>${escapeHtml(strings.gologin.colProfileName)}</th>
-              <th>${escapeHtml(strings.gologin.colProfileId)}</th>
-              <th>${escapeHtml(strings.gologin.colProfileOs)}</th>
-              <th>${escapeHtml(strings.gologin.colCurrentProxy)}</th>
-              <th>${escapeHtml(strings.gologin.colAssignSlot)}</th>
-              <th>${escapeHtml(strings.gologin.colAction)}</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows}
-          </tbody>
-        </table>
-      </div>
+    <div class="gologin-cards-grid">
+      ${profileCards}
     </div>
   `;
 }
 
+// 5. View 4: Settings Tab
 function renderSettingsTab(snap: HubSnapshot): string {
   const strings = getStrings();
   const s = snap.settings;
 
   return `
-    <div class="panel">
-      <div class="settings-header">
-        <h3>${escapeHtml(strings.settings.title)}</h3>
+    <div class="settings-view">
+      <div class="settings-header-banner">
+        <h2 class="section-title">${escapeHtml(strings.settings.title)}</h2>
         <div class="subtext">${escapeHtml(strings.settings.subtitle)}</div>
       </div>
 
       <form id="settings-form">
-        <div class="form-grid">
-          <div class="settings-section">
-            <h4>${escapeHtml(strings.settings.wgSection)}</h4>
+        <div class="settings-grid">
+          <!-- Card 1: Userspace WireGuard -->
+          <div class="surf-card settings-card">
+            <h3 class="card-section-title">${escapeHtml(strings.settings.wgSection)}</h3>
 
             <div class="form-group">
-              <label>${escapeHtml(strings.settings.wgPrivateKey)}</label>
+              <label for="setting-wg-key">${escapeHtml(strings.settings.wgPrivateKey)}</label>
               <input
                 type="password"
                 id="setting-wg-key"
@@ -931,7 +1010,7 @@ function renderSettingsTab(snap: HubSnapshot): string {
             </div>
 
             <div class="form-group">
-              <label>${escapeHtml(strings.settings.wgAddress)}</label>
+              <label for="setting-wg-address">${escapeHtml(strings.settings.wgAddress)}</label>
               <input
                 type="text"
                 id="setting-wg-address"
@@ -942,7 +1021,7 @@ function renderSettingsTab(snap: HubSnapshot): string {
             </div>
 
             <div class="form-group">
-              <label>${escapeHtml(strings.settings.wgDns)}</label>
+              <label for="setting-wg-dns">${escapeHtml(strings.settings.wgDns)}</label>
               <input
                 type="text"
                 id="setting-wg-dns"
@@ -953,11 +1032,12 @@ function renderSettingsTab(snap: HubSnapshot): string {
             </div>
           </div>
 
-          <div class="settings-section">
-            <h4>${escapeHtml(strings.settings.gologinSection)}</h4>
+          <!-- Card 2: GoLogin & Network -->
+          <div class="surf-card settings-card">
+            <h3 class="card-section-title">${escapeHtml(strings.settings.gologinSection)}</h3>
 
             <div class="form-group">
-              <label>${escapeHtml(strings.settings.gologinToken)}</label>
+              <label for="setting-gologin-token">${escapeHtml(strings.settings.gologinToken)}</label>
               <input
                 type="password"
                 id="setting-gologin-token"
@@ -967,10 +1047,10 @@ function renderSettingsTab(snap: HubSnapshot): string {
               <div class="subtext">${escapeHtml(strings.settings.gologinTokenHint)}</div>
             </div>
 
-            <h4>${escapeHtml(strings.settings.networkSection)}</h4>
+            <h3 class="card-section-title" style="margin-top: 14px;">${escapeHtml(strings.settings.networkSection)}</h3>
 
             <div class="form-group">
-              <label>${escapeHtml(strings.settings.basePort)}</label>
+              <label for="setting-base-port">${escapeHtml(strings.settings.basePort)}</label>
               <input
                 type="number"
                 id="setting-base-port"
@@ -982,15 +1062,15 @@ function renderSettingsTab(snap: HubSnapshot): string {
             </div>
 
             <div class="form-group checkbox-group">
-              <label>
+              <label class="checkbox-label">
                 <input type="checkbox" id="setting-allow-lan" ${s.allowLan ? "checked" : ""} />
-                ${escapeHtml(strings.settings.allowLan)}
+                <span>${escapeHtml(strings.settings.allowLan)}</span>
               </label>
               <div class="subtext">${escapeHtml(strings.settings.allowLanDesc)}</div>
             </div>
 
             <div class="form-group">
-              <label>${escapeHtml(strings.settings.language)}</label>
+              <label for="setting-language">${escapeHtml(strings.settings.language)}</label>
               <select id="setting-language" class="select-input">
                 <option value="en" ${s.language === "en" ? "selected" : ""}>English (EN)</option>
                 <option value="vi" ${s.language === "vi" ? "selected" : ""}>Tiếng Việt (VI)</option>
@@ -999,47 +1079,47 @@ function renderSettingsTab(snap: HubSnapshot): string {
           </div>
         </div>
 
-        <div class="btn-group-right">
+        <div class="settings-actions-bar">
           <button type="submit" class="btn btn-primary" id="btn-save-settings">
             ${escapeHtml(strings.settings.saveBtn)}
           </button>
         </div>
       </form>
 
-      <div class="section-divider"></div>
-
-      <div class="settings-section">
-        <h4>${escapeHtml(strings.settings.wireproxySection)}</h4>
-        <div class="wireproxy-status-row">
-          <span class="badge ${s.wireproxyReady ? "badge-safe" : "badge-kill"}">
-            ${escapeHtml(s.wireproxyReady ? strings.settings.wireproxyReady : strings.settings.wireproxyMissing)}
-          </span>
-          <span class="mono subtext">${escapeHtml(s.wireproxyPath || "Auto-resolved in system PATH or Local AppData")}</span>
-          <button type="button" class="btn btn-secondary btn-sm" id="btn-install-wireproxy">
-            ${escapeHtml(strings.settings.installWireproxy)}
-          </button>
+      <div class="settings-grid" style="margin-top: 4px;">
+        <!-- Card 3: Wireproxy Core -->
+        <div class="surf-card settings-card">
+          <h3 class="card-section-title">${escapeHtml(strings.settings.wireproxySection)}</h3>
+          <div class="wireproxy-status-row">
+            <span class="badge ${s.wireproxyReady ? "badge-safe" : "badge-kill"}">
+              ${escapeHtml(s.wireproxyReady ? strings.settings.wireproxyReady : strings.settings.wireproxyMissing)}
+            </span>
+            <span class="mono subtext">${escapeHtml(s.wireproxyPath || "Auto-resolved in system PATH or Local AppData")}</span>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-install-wireproxy">
+              ${escapeHtml(strings.settings.installWireproxy)}
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div class="section-divider"></div>
-
-      <div class="settings-section">
-        <h4>${escapeHtml(strings.settings.importConfSection)}</h4>
-        <div class="subtext">${escapeHtml(strings.settings.importConfDesc)}</div>
-        <textarea
-          id="conf-import-textarea"
-          class="text-input mono textarea-conf"
-          rows="5"
-          placeholder="${escapeHtml(strings.settings.importConfPlaceholder)}"
-        ></textarea>
-        <div class="btn-group-sm">
-          <button type="button" class="btn btn-primary" id="btn-import-conf">
-            ${escapeHtml(strings.settings.importConfBtn)}
-          </button>
-          <button type="button" class="btn btn-secondary" id="btn-upload-conf">
-            ${escapeHtml(strings.settings.uploadConfBtn)}
-          </button>
-          <input type="file" id="conf-file-input" accept=".conf,.txt" style="display:none" />
+        <!-- Card 4: Quick Import -->
+        <div class="surf-card settings-card">
+          <h3 class="card-section-title">${escapeHtml(strings.settings.importConfSection)}</h3>
+          <div class="subtext">${escapeHtml(strings.settings.importConfDesc)}</div>
+          <textarea
+            id="conf-import-textarea"
+            class="text-input mono textarea-conf"
+            rows="3"
+            placeholder="${escapeHtml(strings.settings.importConfPlaceholder)}"
+          ></textarea>
+          <div class="btn-group-sm">
+            <button type="button" class="btn btn-primary" id="btn-import-conf">
+              ${escapeHtml(strings.settings.importConfBtn)}
+            </button>
+            <button type="button" class="btn btn-secondary" id="btn-upload-conf">
+              ${escapeHtml(strings.settings.uploadConfBtn)}
+            </button>
+            <input type="file" id="conf-file-input" accept=".conf,.txt" style="display:none" />
+          </div>
         </div>
       </div>
     </div>
@@ -1052,7 +1132,7 @@ function render(): void {
   if (!app) return;
 
   if (!snapshot) {
-    app.innerHTML = `<div class="loading-state">Loading s-proxy Hub...</div>`;
+    app.innerHTML = `<div class="empty-card" style="margin: 40px auto; max-width: 400px;">Loading s-proxy Hub...</div>`;
     return;
   }
 
@@ -1074,10 +1154,11 @@ function render(): void {
 
   app.innerHTML = `
     <div class="app-shell">
-      ${renderTopBar(snapshot)}
-      ${renderTabBar()}
-      <main class="main-content">
-        ${panelContent}
+      ${renderSidebarRail()}
+      <main class="main-area">
+        <div class="main-container">
+          ${panelContent}
+        </div>
       </main>
     </div>
   `;
@@ -1086,7 +1167,7 @@ function render(): void {
 }
 
 function attachEventListeners(): void {
-  // Quick language switcher in header
+  // Quick language switcher in sidebar rail
   document.querySelectorAll<HTMLButtonElement>(".lang-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const lang = btn.getAttribute("data-lang") as AppLanguage | null;
@@ -1096,7 +1177,7 @@ function attachEventListeners(): void {
     });
   });
 
-  // Tab switching
+  // Tab switching in sidebar rail
   document.querySelectorAll<HTMLButtonElement>(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const tab = btn.getAttribute("data-tab") as typeof activeTab;
@@ -1296,27 +1377,29 @@ function attachEventListeners(): void {
   if (catalogSearch) {
     catalogSearch.addEventListener("input", () => {
       catalogSearchQuery = catalogSearch.value;
-      // Re-render table body without full redraw to keep focus if possible, or redraw
-      const tableWrap = document.querySelector(".table-wrap");
-      if (tableWrap && snapshot) {
-        render();
-        const reSearch = document.getElementById("catalog-search-input") as HTMLInputElement | null;
-        if (reSearch) {
-          reSearch.focus();
-          reSearch.setSelectionRange(reSearch.value.length, reSearch.value.length);
+      const selStart = catalogSearch.selectionStart;
+      const selEnd = catalogSearch.selectionEnd;
+      render();
+      const reSearch = document.getElementById("catalog-search-input") as HTMLInputElement | null;
+      if (reSearch) {
+        reSearch.focus();
+        if (selStart !== null && selEnd !== null) {
+          reSearch.setSelectionRange(selStart, selEnd);
         }
       }
     });
   }
 
-  // Catalog filter select
-  const catalogFilter = document.getElementById("catalog-filter-select") as HTMLSelectElement | null;
-  if (catalogFilter) {
-    catalogFilter.addEventListener("change", () => {
-      catalogFilterType = catalogFilter.value as typeof catalogFilterType;
-      render();
+  // Catalog filter pill tabs
+  document.querySelectorAll<HTMLButtonElement>(".catalog-pill-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const filter = btn.getAttribute("data-filter") as typeof catalogFilterType | null;
+      if (filter) {
+        catalogFilterType = filter;
+        render();
+      }
     });
-  }
+  });
 
   // Catalog create & start slot
   document.querySelectorAll<HTMLButtonElement>(".btn-create-location-slot").forEach((btn) => {

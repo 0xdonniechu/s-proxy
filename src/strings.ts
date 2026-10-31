@@ -83,6 +83,10 @@ export interface I18nStrings {
     noServersMatch: string;
     genericType: string;
     staticType: string;
+    recommendedTitle: string;
+    fastestLocation: string;
+    nearestCountry: string;
+    allLocations: string;
   };
   gologin: {
     title: string;
@@ -234,6 +238,10 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       noServersMatch: "Không tìm thấy máy chủ nào khớp với điều kiện tìm kiếm.",
       genericType: "Tiêu chuẩn",
       staticType: "IP Cố định",
+      recommendedTitle: "Gợi ý cho bạn",
+      fastestLocation: "Vị trí nhanh nhất",
+      nearestCountry: "Quốc gia gần nhất",
+      allLocations: "Tất cả vị trí",
     },
     gologin: {
       title: "Đồng bộ Profile Trình duyệt GoLogin",
@@ -383,6 +391,10 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       noServersMatch: "No servers match your filter criteria.",
       genericType: "Standard",
       staticType: "Static IP",
+      recommendedTitle: "Recommended for you",
+      fastestLocation: "Fastest location",
+      nearestCountry: "Nearest country",
+      allLocations: "All Locations",
     },
     gologin: {
       title: "GoLogin Browser Profile Synchronization",
