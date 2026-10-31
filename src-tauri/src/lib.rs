@@ -183,6 +183,7 @@ impl HubCore {
     }
 
     fn select_adapter_for_slot(&self, adapter_hint: &str) -> Result<DetectedAdapter, String> {
+        let ks_enabled = self.persisted.settings.kill_switch_enabled;
         let hint = adapter_hint.trim();
         if !hint.is_empty() {
             let matched = self
@@ -193,7 +194,7 @@ impl HubCore {
                         || a.description.to_lowercase().contains(&hint.to_lowercase())
                 })
                 .ok_or_else(|| format!("Configured adapter '{hint}' not found"))?;
-            if matched.kind == AdapterKind::PrimaryIsp {
+            if ks_enabled && matched.kind == AdapterKind::PrimaryIsp {
                 return Err(format!(
                     "Fail-closed: Adapter '{}' is the primary ISP interface and cannot be used as a VPN bridge",
                     matched.name
@@ -209,20 +210,25 @@ impl HubCore {
             return Ok(matched.clone());
         }
 
-        // Auto-select Surfshark adapter ONLY (never auto-select NetBird wt0 or PrimaryIsp!)
-        let surf = self
-            .adapters
-            .iter()
-            .find(|a| {
-                a.kind == AdapterKind::Surfshark
-                    && a.status_up
-                    && !a.ipv4.is_empty()
-                    && !a.ipv4.starts_with("169.254.")
-            })
-            .ok_or_else(|| {
-                "Kill-switch active: Surfshark VPN adapter is currently Disconnected. Connect Surfshark Desktop first (or use Userspace WireGuard mode).".to_string()
-            })?;
-        Ok(surf.clone())
+        // Auto-select Surfshark adapter first
+        if let Some(surf) = self.adapters.iter().find(|a| {
+            a.kind == AdapterKind::Surfshark
+                && a.status_up
+                && !a.ipv4.is_empty()
+                && !a.ipv4.starts_with("169.254.")
+        }) {
+            return Ok(surf.clone());
+        }
+
+        if !ks_enabled {
+            if let Some(fallback) = self.adapters.iter().find(|a| {
+                a.status_up && !a.ipv4.is_empty() && !a.ipv4.starts_with("169.254.")
+            }) {
+                return Ok(fallback.clone());
+            }
+        }
+
+        Err("Kill-switch active: Surfshark VPN adapter is currently Disconnected. Connect Surfshark Desktop first (or use Userspace WireGuard mode).".to_string())
     }
 
     fn next_available_port(&self) -> u16 {
@@ -394,6 +400,9 @@ async fn start_slot_internal(hub: &SharedHub, slot_id: &str) -> Result<(), Strin
                 if_index: adapter.if_index,
                 dns_server: dns_ip,
                 primary_isp_ip: adapters_isp_ip,
+                kill_switch_enabled: settings.kill_switch_enabled,
+                dns_leak_protection: settings.dns_leak_protection,
+                ipv6_leak_block: settings.ipv6_leak_block,
             };
 
             match start_proxy_listener(bind_ip, slot_cfg.port, upstream).await {
@@ -485,6 +494,7 @@ async fn start_slot_internal(hub: &SharedHub, slot_id: &str) -> Result<(), Strin
 
             let upstream = UpstreamConfig::UpstreamSocks5 {
                 proxy_addr: wg_handle.internal_addr,
+                ipv6_leak_block: settings.ipv6_leak_block,
             };
             match start_proxy_listener(bind_ip, slot_cfg.port, upstream).await {
                 Ok(proxy_handle) => {
@@ -788,8 +798,9 @@ async fn check_slot_ip(
     if check_res.0.is_some() {
         guard.host_isp_ip = check_res.0;
     }
+    let isp_guard_enabled = guard.persisted.settings.isp_ip_guard;
     if let Some(rt) = guard.runtimes.get_mut(&slot_id) {
-        if check_res.1.leak_status == LeakStatus::LeakBlocked {
+        if check_res.1.leak_status == LeakStatus::LeakBlocked && isp_guard_enabled {
             rt.stop_handles();
             rt.status = SlotRuntimeStatus::KillSwitch;
             rt.status_detail = check_res.1.error_message.clone();
@@ -797,6 +808,66 @@ async fn check_slot_ip(
         rt.egress = Some(check_res.1);
     }
 
+    Ok(guard.build_snapshot())
+}
+
+#[tauri::command]
+async fn set_security_toggle(
+    feature: String,
+    enabled: bool,
+    state: State<'_, SharedHub>,
+) -> Result<HubSnapshot, String> {
+    let hub = Arc::clone(&state);
+    let slots_to_restart: Vec<String> = {
+        let mut guard = hub.lock().map_err(|_| "State lock poisoned".to_string())?;
+        match feature.as_str() {
+            "killSwitchEnabled" => guard.persisted.settings.kill_switch_enabled = enabled,
+            "dnsLeakProtection" => guard.persisted.settings.dns_leak_protection = enabled,
+            "ipv6LeakBlock" => guard.persisted.settings.ipv6_leak_block = enabled,
+            "ispIpGuard" => guard.persisted.settings.isp_ip_guard = enabled,
+            "autoVerifyIp" => guard.persisted.settings.auto_verify_ip = enabled,
+            "allowLan" => guard.persisted.settings.allow_lan = enabled,
+            "resetAll" => {
+                guard.persisted.settings.kill_switch_enabled = true;
+                guard.persisted.settings.dns_leak_protection = true;
+                guard.persisted.settings.ipv6_leak_block = true;
+                guard.persisted.settings.isp_ip_guard = true;
+                guard.persisted.settings.auto_verify_ip = true;
+                guard.persisted.settings.allow_lan = false;
+            }
+            other => return Err(format!("Unknown security feature '{other}'")),
+        }
+        save_state_to_path(&state_file_path(), &guard.persisted)?;
+
+        let needs_listener_restart = matches!(
+            feature.as_str(),
+            "killSwitchEnabled" | "dnsLeakProtection" | "ipv6LeakBlock" | "allowLan" | "resetAll"
+        );
+        if needs_listener_restart {
+            guard
+                .runtimes
+                .iter()
+                .filter_map(|(id, rt)| {
+                    if matches!(
+                        rt.status,
+                        SlotRuntimeStatus::Running | SlotRuntimeStatus::KillSwitch
+                    ) {
+                        Some(id.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    };
+
+    for slot_id in slots_to_restart {
+        let _ = start_slot_internal(&hub, &slot_id).await;
+    }
+
+    let guard = hub.lock().map_err(|_| "State lock poisoned".to_string())?;
     Ok(guard.build_snapshot())
 }
 
@@ -972,6 +1043,7 @@ pub fn run() {
             get_hub_snapshot,
             refresh_system_state,
             save_settings,
+            set_security_toggle,
             import_wg_conf,
             create_slot,
             toggle_slot,

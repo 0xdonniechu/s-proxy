@@ -707,12 +707,42 @@ table.data-table {
 
 table.data-table th,
 table.data-table td {
-  padding: 10px 14px;
+  padding: 11px 16px;
   border-bottom: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
+}
+
+table.data-table th:last-child,
+table.data-table td:last-child {
+  border-right: none;
+}
+
+/* Alternating column backgrounds: Col 1, 3 (IPv4), 5 = subtle grey; Col 2, 4 = white */
+table.data-table tbody td:nth-child(odd) {
+  background-color: #F5F7FA;
+}
+
+table.data-table tbody td:nth-child(even) {
+  background-color: #FFFFFF;
+}
+
+table.data-table thead th:nth-child(odd) {
+  background-color: #EBEEF3;
+}
+
+table.data-table thead th:nth-child(even) {
+  background-color: #F6F8FA;
+}
+
+table.data-table tbody tr:hover td:nth-child(odd) {
+  background-color: #EDF0F5;
+}
+
+table.data-table tbody tr:hover td:nth-child(even) {
+  background-color: #F8FAFC;
 }
 
 table.data-table th {
-  background-color: #F8F9FA;
   font-weight: 600;
   color: var(--text-secondary);
   font-size: 11px;
@@ -1018,6 +1048,190 @@ table.data-table tr:last-child td {
   resize: vertical;
   line-height: 1.4;
   padding: 10px 12px;
+}
+
+/* 11. View 5: Status & Security Toggles */
+.status-shield-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.shield-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.shield-badge-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.shield-badge-safe {
+  background-color: var(--teal);
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(22, 138, 158, 0.25);
+}
+
+.shield-badge-warn {
+  background-color: var(--warning-bg);
+  color: var(--warning);
+}
+
+.shield-banner-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.shield-banner-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.security-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.security-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+  border: 1px solid transparent;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.security-card.is-enabled {
+  border-color: rgba(22, 138, 158, 0.18);
+}
+
+.security-card.is-disabled {
+  background-color: #F8F9FA;
+  border-color: #FECACA;
+}
+
+.security-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.security-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.security-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.security-toggle-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Surfshark Pill Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background-color: #CBD0D8;
+  border-radius: 26px;
+  transition: background-color 0.2s ease;
+}
+
+.toggle-slider::before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #FFFFFF;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--teal);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(22px);
+}
+
+.toggle-switch input:focus-visible + .toggle-slider {
+  box-shadow: 0 0 0 3px rgba(22, 138, 158, 0.25);
+}
+
+.subsystem-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.subsystem-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 20px;
+}
+
+.subsystem-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.subsystem-card-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.subsystem-card-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 /* Modals */

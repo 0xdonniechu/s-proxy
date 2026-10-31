@@ -3,6 +3,7 @@ import type { AppLanguage } from "./types";
 export interface I18nStrings {
   tabs: {
     proxyHub: string;
+    statusTab: string;
     surfsharkCatalog: string;
     gologinSync: string;
     settings: string;
@@ -152,12 +153,46 @@ export interface I18nStrings {
     modeAdapterBridge: string;
     modeUserspaceWg: string;
   };
+  statusPage: {
+    title: string;
+    subtitle: string;
+    allProtectionsActive: string;
+    allProtectionsDesc: string;
+    customProtectionMode: string;
+    customProtectionDesc: string;
+    resetDefaultsBtn: string;
+    refreshStatusBtn: string;
+    protectionsSectionTitle: string;
+    stateOn: string;
+    stateOff: string;
+    killSwitchTitle: string;
+    killSwitchDesc: string;
+    dnsLeakTitle: string;
+    dnsLeakDesc: string;
+    ipv6BlockTitle: string;
+    ipv6BlockDesc: string;
+    ispGuardTitle: string;
+    ispGuardDesc: string;
+    autoVerifyTitle: string;
+    autoVerifyDesc: string;
+    localhostOnlyTitle: string;
+    localhostOnlyDesc: string;
+    subsystemSectionTitle: string;
+    vpnAdapterCardTitle: string;
+    ispGuardCardTitle: string;
+    wireguardEngineCardTitle: string;
+    proxyHubCardTitle: string;
+    activeSlotsCount: string;
+    keyConfigured: string;
+    keyNotSet: string;
+  };
 }
 
 export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
   vi: {
     tabs: {
       proxyHub: "Proxy Hub",
+      statusTab: "Trạng thái & Bảo mật",
       surfsharkCatalog: "Surfshark (180 Máy chủ)",
       gologinSync: "Đồng bộ GoLogin",
       settings: "Cài đặt",
@@ -307,10 +342,44 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       modeAdapterBridge: "Cầu nối Adapter",
       modeUserspaceWg: "WireGuard Độc lập",
     },
+    statusPage: {
+      title: "Trạng thái Hệ thống & Khiên Bảo vệ",
+      subtitle: "Tất cả cơ chế chống rò rỉ IP/DNS được BẬT mặc định. Bạn có thể kiểm tra trực quan từng tính năng và bật/tắt ngay bên dưới.",
+      allProtectionsActive: "Tất cả 6 lớp bảo vệ an toàn đang BẬT (ON)",
+      allProtectionsDesc: "Mọi kết nối qua s-proxy đều được khóa cứng vào đường hầm VPN và chống rò rỉ DNS/IPv6/ISP.",
+      customProtectionMode: "Một số tính năng bảo vệ đang TẮT (OFF)",
+      customProtectionDesc: "Bạn đã tắt thủ công một hoặc nhiều lớp bảo vệ. Khuyến nghị bật lại để đảm bảo an toàn tuyệt đối cho GoLogin.",
+      resetDefaultsBtn: "Khôi phục Mặc định An toàn (Bật tất cả)",
+      refreshStatusBtn: "Làm mới Trạng thái",
+      protectionsSectionTitle: "Trạng thái các Tính năng An toàn (Bật / Tắt)",
+      stateOn: "ĐANG BẬT (ON)",
+      stateOff: "ĐANG TẮT (OFF)",
+      killSwitchTitle: "1. Khóa cứng Card VPN & Fail-Closed Kill-Switch (IP_UNICAST_IF)",
+      killSwitchDesc: "Buộc mọi socket đi ra qua giao diện Surfshark Wintun hoặc đường hầm WireGuard. Ngắt kết nối ngay lập tức nếu VPN rớt, tuyệt đối không rớt về Wi-Fi/Ethernet.",
+      dnsLeakTitle: "2. Chống rò rỉ DNS qua Đường hầm (Tunnel-Only DNS RFC 1035)",
+      dnsLeakDesc: "Phân giải tên miền SOCKS5 (ATYP=DOMAIN) và HTTP CONNECT trực tiếp bên trong đường hầm Surfshark (162.252.172.57), không dùng DNS của nhà mạng ISP.",
+      ipv6BlockTitle: "3. Chặn rò rỉ IPv6 Dual-Stack (IPv6 Leak Blocker)",
+      ipv6BlockDesc: "Từ chối toàn bộ yêu cầu kết nối IPv6 (ATYP=0x04) và chỉ chọn địa chỉ IPv4 để ngăn trình duyệt rò rỉ qua IPv6 của nhà mạng.",
+      ispGuardTitle: "4. Khiên đối chiếu IP Thật Nhà mạng (Real ISP IP Egress Guard)",
+      ispGuardDesc: "Tự động so sánh Exit IP của từng cổng proxy với IP thật của nhà mạng (VNPT/Viettel/FPT). Cảnh báo và gắn nhãn chặn nếu phát hiện trùng IP ISP.",
+      autoVerifyTitle: "5. Tự động Kiểm tra Exit IP khi Bật Slot (Auto-Verify Egress)",
+      autoVerifyDesc: "Tự động kiểm tra địa chỉ IP đầu ra, vị trí quốc gia và độ trễ ngay sau khi khởi động bất kỳ Proxy Slot nào.",
+      localhostOnlyTitle: "6. Cô lập Cổng Nội bộ Localhost (127.0.0.1 Isolation)",
+      localhostOnlyDesc: "Chỉ cho phép ứng dụng trên chính máy tính này (GoLogin/Trình duyệt) kết nối vào cổng proxy; chặn truy cập từ các thiết bị khác trong mạng LAN.",
+      subsystemSectionTitle: "Trạng thái Trực tiếp các Thành phần Lõi",
+      vpnAdapterCardTitle: "Card Mạng Surfshark",
+      ispGuardCardTitle: "IP Thật Máy Chủ (ISP)",
+      wireguardEngineCardTitle: "Lõi Multi-VPN Wireproxy",
+      proxyHubCardTitle: "Cổng Proxy Đang Chạy",
+      activeSlotsCount: "{running} / {total} slot đang chạy",
+      keyConfigured: "Đã nạp PrivateKey",
+      keyNotSet: "Chưa nạp PrivateKey",
+    },
   },
   en: {
     tabs: {
       proxyHub: "Proxy Hub",
+      statusTab: "Status & Security",
       surfsharkCatalog: "Surfshark (180 Servers)",
       gologinSync: "GoLogin Sync",
       settings: "Settings",
@@ -459,6 +528,39 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       leakError: "Check Failed",
       modeAdapterBridge: "Adapter Bridge",
       modeUserspaceWg: "Userspace WG",
+    },
+    statusPage: {
+      title: "System Status & Security Protections",
+      subtitle: "All IP/DNS leak protections are ON by default. View live status below or toggle individual protections OFF/ON when needed.",
+      allProtectionsActive: "All 6 Security Protections Are Active (ON)",
+      allProtectionsDesc: "Every proxy slot is strictly bound to Surfshark VPN tunnels with zero fallback to host ISP Wi-Fi/Ethernet.",
+      customProtectionMode: "Custom Security Mode (One or more protections OFF)",
+      customProtectionDesc: "You have manually disabled one or more safety layers. Re-enable all toggles for maximum GoLogin anti-detect isolation.",
+      resetDefaultsBtn: "Restore Safe Defaults (All ON)",
+      refreshStatusBtn: "Refresh Status",
+      protectionsSectionTitle: "Security & Leak Protection Toggles (Default: ON)",
+      stateOn: "ACTIVE (ON)",
+      stateOff: "DISABLED (OFF)",
+      killSwitchTitle: "1. Fail-Closed Kill-Switch & Adapter Lock (IP_UNICAST_IF)",
+      killSwitchDesc: "Binds every outbound TCP/UDP socket directly to the Surfshark Wintun interface or WireGuard tunnel. Drops traffic immediately if VPN disconnects—never falls back to ISP Wi-Fi/Ethernet.",
+      dnsLeakTitle: "2. Tunnel-Only DNS Leak Protection (RFC 1035)",
+      dnsLeakDesc: "Resolves all SOCKS5 (ATYP=DOMAIN) and HTTP CONNECT hostnames exclusively inside the VPN tunnel (162.252.172.57), preventing Windows/ISP DNS leaks.",
+      ipv6BlockTitle: "3. IPv6 Dual-Stack Leak Blocker",
+      ipv6BlockDesc: "Rejects raw IPv6 socket requests (ATYP=0x04) and enforces IPv4-only tunnel resolution so websites cannot leak your real ISP IPv6 address.",
+      ispGuardTitle: "4. Real ISP IP Egress Verification Guard",
+      ispGuardDesc: "Continuously compares each slot's exit IP against your detected host ISP IP and flags any accidental ISP match as LEAK BLOCKED.",
+      autoVerifyTitle: "5. Auto-Verify Exit IP on Slot Start",
+      autoVerifyDesc: "Automatically probes exit IP, country, and latency through the proxy tunnel immediately after a slot starts.",
+      localhostOnlyTitle: "6. Localhost-Only Socket Isolation (127.0.0.1)",
+      localhostOnlyDesc: "Restricts proxy listeners strictly to 127.0.0.1 on this PC so other devices on your local network cannot use your proxy ports.",
+      subsystemSectionTitle: "Live Core Subsystem Status",
+      vpnAdapterCardTitle: "Surfshark Adapter",
+      ispGuardCardTitle: "Host ISP IP Baseline",
+      wireguardEngineCardTitle: "Wireproxy Multi-VPN",
+      proxyHubCardTitle: "Active Proxy Slots",
+      activeSlotsCount: "{running} / {total} slots running",
+      keyConfigured: "PrivateKey Ready",
+      keyNotSet: "PrivateKey Missing",
     },
   },
 };

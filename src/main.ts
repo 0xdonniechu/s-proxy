@@ -15,7 +15,7 @@ import type {
 // State
 let snapshot: HubSnapshot | null = null;
 let currentLanguage: AppLanguage = "en";
-let activeTab: "hub" | "catalog" | "gologin" | "settings" = "hub";
+let activeTab: "hub" | "status" | "catalog" | "gologin" | "settings" = "hub";
 
 // Catalog filter state
 let catalogSearchQuery = "";
@@ -111,7 +111,7 @@ async function handleToggleSlot(slotId: string, start: boolean): Promise<void> {
   try {
     const res = await invoke<HubSnapshot>("toggle_slot", { slotId, start });
     applySnapshot(res);
-    if (start) {
+    if (start && res.settings.autoVerifyIp) {
       const startedSlot = res.slots.find((s) => s.id === slotId);
       if (startedSlot && startedSlot.status === "running") {
         window.setTimeout(() => {
@@ -191,12 +191,39 @@ async function handleQuickSwitchLanguage(lang: AppLanguage): Promise<void> {
     allowLan: snapshot.settings.allowLan,
     language: lang,
     wireproxyPath: snapshot.settings.wireproxyPath,
+    killSwitchEnabled: snapshot.settings.killSwitchEnabled,
+    dnsLeakProtection: snapshot.settings.dnsLeakProtection,
+    ipv6LeakBlock: snapshot.settings.ipv6LeakBlock,
+    ispIpGuard: snapshot.settings.ispIpGuard,
+    autoVerifyIp: snapshot.settings.autoVerifyIp,
   };
   try {
     const res = await invoke<HubSnapshot>("save_settings", { payload });
     applySnapshot(res);
   } catch (err) {
     showToast(`Error: ${String(err)}`);
+  }
+}
+
+async function handleToggleSecurityFeature(feature: string, enabled: boolean): Promise<void> {
+  try {
+    const res = await invoke<HubSnapshot>("set_security_toggle", { feature, enabled });
+    applySnapshot(res);
+    if (feature === "resetAll") {
+      showToast(
+        currentLanguage === "vi"
+          ? "Đã khôi phục toàn bộ 6 lớp bảo vệ về mặc định (BẬT)!"
+          : "All 6 security protections restored to safe defaults (ON)!"
+      );
+    } else {
+      showToast(
+        currentLanguage === "vi"
+          ? `Đã ${enabled ? "BẬT (ON)" : "TẮT (OFF)"} tính năng bảo vệ`
+          : `Protection ${enabled ? "ENABLED (ON)" : "DISABLED (OFF)"}`
+      );
+    }
+  } catch (err) {
+    showToast(`Security Toggle Error: ${String(err)}`);
   }
 }
 
@@ -253,7 +280,7 @@ async function handleCreateSlot(payload: CreateSlotPayload, switchToHub = false)
     }
     applySnapshot(res);
     showToast(currentLanguage === "vi" ? "Tạo slot thành công!" : "Slot created successfully!");
-    if (payload.autoStart) {
+    if (payload.autoStart && res.settings.autoVerifyIp) {
       const created = res.slots.find((s) => !prevIds.has(s.id) && s.status === "running");
       if (created) {
         window.setTimeout(() => {
@@ -362,6 +389,11 @@ function renderSidebarRail(): string {
         <button type="button" class="nav-btn tab-btn ${activeTab === "hub" ? "active" : ""}" data-tab="hub" title="${escapeHtml(strings.tabs.proxyHub)}">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </button>
+        <button type="button" class="nav-btn tab-btn ${activeTab === "status" ? "active" : ""}" data-tab="status" title="${escapeHtml(strings.tabs.statusTab)}">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
           </svg>
         </button>
         <button type="button" class="nav-btn tab-btn ${activeTab === "catalog" ? "active" : ""}" data-tab="catalog" title="${escapeHtml(strings.tabs.surfsharkCatalog)}">
@@ -676,6 +708,30 @@ function renderHubTab(snap: HubSnapshot): string {
             <span class="bold">${isWireproxyReady ? escapeHtml(strings.header.ready) : escapeHtml(strings.header.missing)}</span>
           </div>
         </div>
+        <div class="indicator-divider"></div>
+        <div class="indicator-item">
+          <span class="indicator-label">${escapeHtml(strings.tabs.statusTab)}</span>
+          <div class="indicator-value">
+            ${(() => {
+              const s = snap.settings;
+              const activeCount = [
+                s.killSwitchEnabled,
+                s.dnsLeakProtection,
+                s.ipv6LeakBlock,
+                s.ispIpGuard,
+                s.autoVerifyIp,
+                !s.allowLan,
+              ].filter(Boolean).length;
+              const allOn = activeCount === 6;
+              return `
+                <span class="status-dot ${allOn ? "dot-online" : "dot-warning"}"></span>
+                <button type="button" class="btn btn-sm ${allOn ? "btn-secondary" : "btn-danger"} btn-open-status-tab" style="padding: 3px 10px;">
+                  🛡 ${activeCount}/6 ON
+                </button>
+              `;
+            })()}
+          </div>
+        </div>
       </div>
 
       <div class="banner-actions">
@@ -741,6 +797,195 @@ function renderHubTab(snap: HubSnapshot): string {
     </details>
 
     ${modalHtml}
+  `;
+}
+
+// 2b. View 1b: Status & Security Protections Tab
+function renderStatusTab(snap: HubSnapshot): string {
+  const strings = getStrings();
+  const sp = strings.statusPage;
+  const s = snap.settings;
+  const surf = snap.surfsharkAdapter;
+  const isSurfConnected = surf && surf.statusUp && !surf.ipv4.startsWith("169.254.") && surf.ipv4 !== "";
+  const runningSlots = snap.slots.filter((slot) => slot.status === "running").length;
+
+  const features = [
+    {
+      id: "killSwitchEnabled",
+      enabled: s.killSwitchEnabled,
+      title: sp.killSwitchTitle,
+      desc: sp.killSwitchDesc,
+      badge: "IP_UNICAST_IF",
+    },
+    {
+      id: "dnsLeakProtection",
+      enabled: s.dnsLeakProtection,
+      title: sp.dnsLeakTitle,
+      desc: sp.dnsLeakDesc,
+      badge: "RFC 1035 Tunnel DNS",
+    },
+    {
+      id: "ipv6LeakBlock",
+      enabled: s.ipv6LeakBlock,
+      title: sp.ipv6BlockTitle,
+      desc: sp.ipv6BlockDesc,
+      badge: "IPv4-Only Lock",
+    },
+    {
+      id: "ispIpGuard",
+      enabled: s.ispIpGuard,
+      title: sp.ispGuardTitle,
+      desc: sp.ispGuardDesc,
+      badge: snap.hostIspIp ? `ISP: ${snap.hostIspIp}` : "ISP Baseline",
+    },
+    {
+      id: "autoVerifyIp",
+      enabled: s.autoVerifyIp,
+      title: sp.autoVerifyTitle,
+      desc: sp.autoVerifyDesc,
+      badge: "Auto Probe",
+    },
+    {
+      id: "localhostOnly",
+      enabled: !s.allowLan,
+      title: sp.localhostOnlyTitle,
+      desc: sp.localhostOnlyDesc,
+      badge: !s.allowLan ? "127.0.0.1" : "0.0.0.0 (LAN)",
+    },
+  ];
+
+  const allActive = features.every((f) => f.enabled);
+
+  const featureCardsHtml = features
+    .map(
+      (f) => `
+      <div class="surf-card security-card ${f.enabled ? "is-enabled" : "is-disabled"}">
+        <div class="security-card-info">
+          <div class="security-card-header">
+            <span class="security-card-title">${escapeHtml(f.title)}</span>
+            <span class="badge ${f.enabled ? "badge-running" : "badge-kill"}">
+              ${escapeHtml(f.enabled ? sp.stateOn : sp.stateOff)}
+            </span>
+            <span class="badge badge-os mono">${escapeHtml(f.badge)}</span>
+          </div>
+          <div class="subtext">${escapeHtml(f.desc)}</div>
+        </div>
+        <div class="security-toggle-col">
+          <label class="toggle-switch" title="${escapeHtml(f.title)}">
+            <input
+              type="checkbox"
+              class="security-toggle-input"
+              data-feature="${escapeHtml(f.id)}"
+              ${f.enabled ? "checked" : ""}
+            />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    `
+    )
+    .join("");
+
+  return `
+    <!-- Top Overall Security Shield Banner -->
+    <div class="surf-card status-shield-banner">
+      <div class="shield-banner-left">
+        <div class="shield-badge-icon ${allActive ? "shield-badge-safe" : "shield-badge-warn"}">
+          ${allActive ? "🛡" : "⚠"}
+        </div>
+        <div class="shield-banner-meta">
+          <div class="shield-banner-title">
+            ${escapeHtml(allActive ? sp.allProtectionsActive : sp.customProtectionMode)}
+          </div>
+          <div class="subtext">
+            ${escapeHtml(allActive ? sp.allProtectionsDesc : sp.customProtectionDesc)}
+          </div>
+        </div>
+      </div>
+      <div class="btn-group-sm">
+        ${
+          !allActive
+            ? `<button type="button" class="btn btn-primary" id="btn-reset-all-security">
+                 ${escapeHtml(sp.resetDefaultsBtn)}
+               </button>`
+            : ""
+        }
+        <button type="button" class="btn btn-secondary" id="btn-status-refresh">
+          ⟳ ${escapeHtml(sp.refreshStatusBtn)}
+        </button>
+      </div>
+    </div>
+
+    <!-- Live Subsystem Health Grid -->
+    <div class="slots-section">
+      <div class="section-title-sm">${escapeHtml(sp.subsystemSectionTitle)}</div>
+      <div class="subsystem-grid">
+        <div class="surf-card subsystem-card">
+          <div class="subsystem-card-top">
+            <span class="subsystem-card-label">${escapeHtml(sp.vpnAdapterCardTitle)}</span>
+            <span class="status-dot ${isSurfConnected ? "dot-online" : "dot-offline"}"></span>
+          </div>
+          <div class="subsystem-card-value mono">
+            ${isSurfConnected ? escapeHtml(surf?.ipv4 || "") : escapeHtml(strings.header.disconnected)}
+          </div>
+          <div class="subtext-sm">
+            ${escapeHtml(surf?.description || "Surfshark Wintun / OpenVPN")}
+          </div>
+        </div>
+
+        <div class="surf-card subsystem-card">
+          <div class="subsystem-card-top">
+            <span class="subsystem-card-label">${escapeHtml(sp.ispGuardCardTitle)}</span>
+            <span class="status-dot ${snap.hostIspIp ? "dot-online" : "dot-warning"}"></span>
+          </div>
+          <div class="subsystem-card-value mono">
+            ${escapeHtml(snap.hostIspIp || "Detecting...")}
+          </div>
+          <div class="subtext-sm">
+            ${s.ispIpGuard ? escapeHtml(sp.stateOn) : escapeHtml(sp.stateOff)}
+          </div>
+        </div>
+
+        <div class="surf-card subsystem-card">
+          <div class="subsystem-card-top">
+            <span class="subsystem-card-label">${escapeHtml(sp.wireguardEngineCardTitle)}</span>
+            <span class="status-dot ${s.wireproxyReady && s.hasWgPrivateKey ? "dot-online" : "dot-warning"}"></span>
+          </div>
+          <div class="subsystem-card-value">
+            ${s.wireproxyReady ? escapeHtml(strings.header.ready) : escapeHtml(strings.header.missing)}
+          </div>
+          <div class="subtext-sm">
+            ${escapeHtml(s.hasWgPrivateKey ? sp.keyConfigured : sp.keyNotSet)}
+          </div>
+        </div>
+
+        <div class="surf-card subsystem-card">
+          <div class="subsystem-card-top">
+            <span class="subsystem-card-label">${escapeHtml(sp.proxyHubCardTitle)}</span>
+            <span class="status-dot ${runningSlots > 0 ? "dot-online" : "dot-warning"}"></span>
+          </div>
+          <div class="subsystem-card-value">
+            ${escapeHtml(
+              sp.activeSlotsCount
+                .replace("{running}", String(runningSlots))
+                .replace("{total}", String(snap.slots.length))
+            )}
+          </div>
+          <div class="subtext-sm mono">
+            ${s.allowLan ? "0.0.0.0" : "127.0.0.1"}:${s.basePort}+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Security Toggles Grid -->
+    <div class="slots-section">
+      <h2 class="section-title" style="margin-bottom: 4px;">${escapeHtml(sp.protectionsSectionTitle)}</h2>
+      <div class="subtext" style="margin-bottom: 10px;">${escapeHtml(sp.subtitle)}</div>
+      <div class="security-grid">
+        ${featureCardsHtml}
+      </div>
+    </div>
   `;
 }
 
@@ -1141,6 +1386,9 @@ function render(): void {
     case "hub":
       panelContent = renderHubTab(snapshot);
       break;
+    case "status":
+      panelContent = renderStatusTab(snapshot);
+      break;
     case "catalog":
       panelContent = renderCatalogTab(snapshot);
       break;
@@ -1187,6 +1435,42 @@ function attachEventListeners(): void {
       }
     });
   });
+
+  // Quick button in Hub banner to jump to Status & Security tab
+  document.querySelectorAll<HTMLButtonElement>(".btn-open-status-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      activeTab = "status";
+      render();
+    });
+  });
+
+  // Status tab: Security toggle switches
+  document.querySelectorAll<HTMLInputElement>(".security-toggle-input").forEach((input) => {
+    input.addEventListener("change", () => {
+      const feature = input.getAttribute("data-feature");
+      if (!feature) return;
+      if (feature === "localhostOnly") {
+        // Localhost-Only ON means allowLan = false
+        void handleToggleSecurityFeature("allowLan", !input.checked);
+      } else {
+        void handleToggleSecurityFeature(feature, input.checked);
+      }
+    });
+  });
+
+  const btnResetAllSecurity = document.getElementById("btn-reset-all-security");
+  if (btnResetAllSecurity) {
+    btnResetAllSecurity.addEventListener("click", () => {
+      void handleToggleSecurityFeature("resetAll", true);
+    });
+  }
+
+  const btnStatusRefresh = document.getElementById("btn-status-refresh");
+  if (btnStatusRefresh) {
+    btnStatusRefresh.addEventListener("click", () => {
+      void handleRefreshSystem();
+    });
+  }
 
   // Hub actions
   const btnOpenCreateBridge = document.getElementById("btn-open-create-bridge");
@@ -1489,6 +1773,11 @@ function attachEventListeners(): void {
         allowLan: allowLanInput ? allowLanInput.checked : snapshot.settings.allowLan,
         language: (langInput?.value as AppLanguage) || snapshot.settings.language,
         wireproxyPath: snapshot.settings.wireproxyPath,
+        killSwitchEnabled: snapshot.settings.killSwitchEnabled,
+        dnsLeakProtection: snapshot.settings.dnsLeakProtection,
+        ipv6LeakBlock: snapshot.settings.ipv6LeakBlock,
+        ispIpGuard: snapshot.settings.ispIpGuard,
+        autoVerifyIp: snapshot.settings.autoVerifyIp,
       };
 
       void handleSaveSettings(payload);

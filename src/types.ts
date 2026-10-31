@@ -59,6 +59,11 @@ export interface SettingsView {
   language: AppLanguage;
   wireproxyPath: string;
   wireproxyReady: boolean;
+  killSwitchEnabled: boolean;
+  dnsLeakProtection: boolean;
+  ipv6LeakBlock: boolean;
+  ispIpGuard: boolean;
+  autoVerifyIp: boolean;
 }
 
 export interface SettingsUpdatePayload {
@@ -70,6 +75,11 @@ export interface SettingsUpdatePayload {
   allowLan: boolean;
   language: AppLanguage;
   wireproxyPath: string;
+  killSwitchEnabled: boolean;
+  dnsLeakProtection: boolean;
+  ipv6LeakBlock: boolean;
+  ispIpGuard: boolean;
+  autoVerifyIp: boolean;
 }
 
 export interface ProxySlotView {
