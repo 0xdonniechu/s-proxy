@@ -20,6 +20,11 @@ export interface I18nStrings {
   hub: {
     addAdapterSlot: string;
     addMultiVpnSlot: string;
+    startAll: string;
+    stopAll: string;
+    checkAllIps: string;
+    copyAllSocks5: string;
+    copiedAll: string;
     refreshSystem: string;
     emptySlots: string;
     slotsTitle: string;
@@ -51,6 +56,8 @@ export interface I18nStrings {
     kindOtherVpn: string;
     kindPrimaryIsp: string;
     modalCreateTitle: string;
+    modalCreateMultiTitle: string;
+    selectServerLabel: string;
     slotNameLabel: string;
     slotPortLabel: string;
     slotPortHint: string;
@@ -102,6 +109,7 @@ export interface I18nStrings {
     wgPrivateKey: string;
     wgPrivateKeyPlaceholder: string;
     wgPrivateKeyHint: string;
+    openSurfsharkKeyPage: string;
     wgAddress: string;
     wgDns: string;
     gologinSection: string;
@@ -123,6 +131,7 @@ export interface I18nStrings {
     importConfDesc: string;
     importConfPlaceholder: string;
     importConfBtn: string;
+    uploadConfBtn: string;
     saveBtn: string;
     saving: string;
     savedSuccess: string;
@@ -162,7 +171,12 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
     hub: {
       addAdapterSlot: "+ Thêm Slot Adapter Bridge",
       addMultiVpnSlot: "+ Thêm Slot Multi-VPN",
-      refreshSystem: "Làm mới Adapter & Hệ thống",
+      startAll: "▶ Bật tất cả",
+      stopAll: "■ Dừng tất cả",
+      checkAllIps: "⟳ Kiểm tra tất cả IP",
+      copyAllSocks5: "⎘ Chép toàn bộ SOCKS5",
+      copiedAll: "Đã chép toàn bộ danh sách proxy!",
+      refreshSystem: "Làm mới Hệ thống",
       emptySlots: "Chưa có slot proxy nào. Hãy tạo slot mới ở trên hoặc chọn máy chủ từ tab Surfshark.",
       slotsTitle: "Danh sách Proxy Slot đang hoạt động",
       colSlotName: "Tên Slot",
@@ -193,6 +207,8 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       kindOtherVpn: "VPN khác / NetBird",
       kindPrimaryIsp: "Primary ISP (Bảo vệ chống rò rỉ)",
       modalCreateTitle: "Tạo Slot Adapter Bridge Mới",
+      modalCreateMultiTitle: "Tạo Slot Multi-VPN (WireGuard Độc lập)",
+      selectServerLabel: "Chọn Máy chủ Surfshark (180 vị trí)",
       slotNameLabel: "Tên Slot",
       slotPortLabel: "Cổng lắng nghe (Port)",
       slotPortHint: "Để trống để tự động lấy cổng khả dụng tiếp theo",
@@ -244,6 +260,7 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       wgPrivateKey: "WireGuard PrivateKey (Khóa Riêng Surfshark)",
       wgPrivateKeyPlaceholder: "Dán khóa riêng WireGuard (32 bytes base64)",
       wgPrivateKeyHint: "Lấy từ tài khoản Surfshark -> Manual Setup -> WireGuard",
+      openSurfsharkKeyPage: "Lấy khóa trên Surfshark Web ↗",
       wgAddress: "Địa chỉ IP Đường hầm (Tunnel Address)",
       wgDns: "Máy chủ DNS Đường hầm",
       gologinSection: "Tích hợp GoLogin",
@@ -265,6 +282,7 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       importConfDesc: "Dán nội dung tệp .conf tải từ trang cá nhân Surfshark để tự động trích xuất PrivateKey, Address và DNS.",
       importConfPlaceholder: "[Interface]\n" + "Private" + "Key = <base64-key>\nAddress = 10.14.0.2/16\nDNS = 162.252.172.57",
       importConfBtn: "Nhập & Áp dụng .conf",
+      uploadConfBtn: "Chọn file .conf từ máy...",
       saveBtn: "Lưu Cài đặt",
       saving: "Đang lưu...",
       savedSuccess: "Đã lưu cài đặt thành công!",
@@ -302,7 +320,12 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
     hub: {
       addAdapterSlot: "+ Adapter Bridge Slot",
       addMultiVpnSlot: "+ Multi-VPN Slot",
-      refreshSystem: "Refresh System & Adapters",
+      startAll: "▶ Start All",
+      stopAll: "■ Stop All",
+      checkAllIps: "⟳ Check All IPs",
+      copyAllSocks5: "⎘ Copy All SOCKS5",
+      copiedAll: "Copied all proxy endpoints to clipboard!",
+      refreshSystem: "Refresh System",
       emptySlots: "No proxy slots configured yet. Create one above or pick a server from Surfshark tab.",
       slotsTitle: "Active Proxy Slots",
       colSlotName: "Slot Name",
@@ -333,6 +356,8 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       kindOtherVpn: "Other VPN / NetBird",
       kindPrimaryIsp: "Primary ISP (Protected against leaks)",
       modalCreateTitle: "Create Adapter Bridge Slot",
+      modalCreateMultiTitle: "Create Multi-VPN Slot (Userspace WireGuard)",
+      selectServerLabel: "Select Surfshark Server (180 locations)",
       slotNameLabel: "Slot Name",
       slotPortLabel: "Listen Port",
       slotPortHint: "Leave blank to auto-assign the next free port",
@@ -384,6 +409,7 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       wgPrivateKey: "Surfshark WireGuard PrivateKey",
       wgPrivateKeyPlaceholder: "Paste WireGuard private key (32 bytes base64)",
       wgPrivateKeyHint: "Obtain from Surfshark Account -> Manual Setup -> WireGuard",
+      openSurfsharkKeyPage: "Get WireGuard Key on Surfshark Web ↗",
       wgAddress: "Tunnel Address",
       wgDns: "Tunnel DNS Server",
       gologinSection: "GoLogin Integration",
@@ -405,6 +431,7 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       importConfDesc: "Paste the content of a downloaded Surfshark WireGuard configuration file (.conf) to auto-fill PrivateKey, Address, and DNS.",
       importConfPlaceholder: "[Interface]\n" + "Private" + "Key = <base64-key>\nAddress = 10.14.0.2/16\nDNS = 162.252.172.57",
       importConfBtn: "Import & Apply .conf",
+      uploadConfBtn: "Choose .conf File...",
       saveBtn: "Save Settings",
       saving: "Saving...",
       savedSuccess: "Settings saved successfully!",

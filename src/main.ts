@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { DICTIONARY, type I18nStrings } from "./strings";
 import type {
   AppLanguage,
@@ -13,7 +14,7 @@ import type {
 
 // State
 let snapshot: HubSnapshot | null = null;
-let currentLanguage: AppLanguage = "vi";
+let currentLanguage: AppLanguage = "en";
 let activeTab: "hub" | "catalog" | "gologin" | "settings" = "hub";
 
 // Catalog filter state
@@ -27,8 +28,9 @@ const gologinModeSelection: Record<string, "socks5" | "http"> = {};
 // Hub slot GoLogin selection state: slotId -> profileId
 const hubSlotGologinSelection: Record<string, string> = {};
 
-// Modal state for creating Adapter Bridge slot
+// Modal states
 let isCreateBridgeModalOpen = false;
+let isCreateMultiModalOpen = false;
 
 // Toast helper
 let toastTimeout: number | undefined;
@@ -103,6 +105,90 @@ async function handleToggleSlot(slotId: string, start: boolean): Promise<void> {
   try {
     const res = await invoke<HubSnapshot>("toggle_slot", { slotId, start });
     applySnapshot(res);
+    if (start) {
+      const startedSlot = res.slots.find((s) => s.id === slotId);
+      if (startedSlot && startedSlot.status === "running") {
+        window.setTimeout(() => {
+          void handleCheckSlotIp(slotId);
+        }, 500);
+      }
+    }
+  } catch (err) {
+    showToast(`Error: ${String(err)}`);
+  }
+}
+
+async function handleStartAllSlots(): Promise<void> {
+  showToast(currentLanguage === "vi" ? "Đang bật tất cả các slot..." : "Starting all proxy slots...");
+  try {
+    const res = await invoke<HubSnapshot>("start_all_slots");
+    applySnapshot(res);
+    showToast(currentLanguage === "vi" ? "Đã bật các slot khả dụng!" : "Started available proxy slots!");
+  } catch (err) {
+    showToast(`Error: ${String(err)}`);
+  }
+}
+
+async function handleStopAllSlots(): Promise<void> {
+  try {
+    const res = await invoke<HubSnapshot>("stop_all_slots");
+    applySnapshot(res);
+    showToast(currentLanguage === "vi" ? "Đã dừng tất cả slot!" : "All proxy slots stopped!");
+  } catch (err) {
+    showToast(`Error: ${String(err)}`);
+  }
+}
+
+async function handleCheckAllSlotIps(): Promise<void> {
+  if (!snapshot) return;
+  const runningSlots = snapshot.slots.filter((s) => s.status === "running");
+  if (runningSlots.length === 0) {
+    showToast(
+      currentLanguage === "vi"
+        ? "Chưa có slot nào đang chạy để kiểm tra IP"
+        : "No running proxy slots to check"
+    );
+    return;
+  }
+  showToast(
+    currentLanguage === "vi"
+      ? `Đang kiểm tra IP cho ${runningSlots.length} slot...`
+      : `Checking exit IP for ${runningSlots.length} running slot(s)...`
+  );
+  for (const s of runningSlots) {
+    await handleCheckSlotIp(s.id);
+  }
+}
+
+async function handleCopyAllSocks5(): Promise<void> {
+  if (!snapshot || snapshot.slots.length === 0) return;
+  const lines = snapshot.slots.map((s) => s.socks5Uri).join("\n");
+  try {
+    await navigator.clipboard.writeText(lines);
+    showToast(getStrings().hub.copiedAll);
+  } catch {
+    showToast("Copy failed");
+  }
+}
+
+async function handleQuickSwitchLanguage(lang: AppLanguage): Promise<void> {
+  if (!snapshot || currentLanguage === lang) return;
+  currentLanguage = lang;
+  document.documentElement.lang = lang;
+  render();
+  const payload: SettingsUpdatePayload = {
+    wgPrivateKey: null,
+    wgAddress: snapshot.settings.wgAddress,
+    wgDns: snapshot.settings.wgDns,
+    gologinToken: null,
+    basePort: snapshot.settings.basePort,
+    allowLan: snapshot.settings.allowLan,
+    language: lang,
+    wireproxyPath: snapshot.settings.wireproxyPath,
+  };
+  try {
+    const res = await invoke<HubSnapshot>("save_settings", { payload });
+    applySnapshot(res);
   } catch (err) {
     showToast(`Error: ${String(err)}`);
   }
@@ -152,13 +238,23 @@ async function handleCheckSlotIp(slotId: string): Promise<void> {
 
 async function handleCreateSlot(payload: CreateSlotPayload, switchToHub = false): Promise<void> {
   try {
+    const prevIds = new Set((snapshot?.slots || []).map((s) => s.id));
     const res = await invoke<HubSnapshot>("create_slot", { payload });
     isCreateBridgeModalOpen = false;
+    isCreateMultiModalOpen = false;
     if (switchToHub) {
       activeTab = "hub";
     }
     applySnapshot(res);
     showToast(currentLanguage === "vi" ? "Tạo slot thành công!" : "Slot created successfully!");
+    if (payload.autoStart) {
+      const created = res.slots.find((s) => !prevIds.has(s.id) && s.status === "running");
+      if (created) {
+        window.setTimeout(() => {
+          void handleCheckSlotIp(created.id);
+        }, 600);
+      }
+    }
   } catch (err) {
     showToast(`Error: ${String(err)}`);
   }
@@ -253,9 +349,17 @@ function renderTopBar(snap: HubSnapshot): string {
 
   return `
     <header class="top-bar">
-      <div class="brand">
-        <span class="brand-title">s-proxy</span>
-        <span class="brand-subtitle">${escapeHtml(strings.header.brandSubtitle)}</span>
+      <div class="brand-row">
+        <div class="brand-logo" aria-hidden="true">
+          <svg viewBox="0 0 256 256" width="36" height="36" fill="none">
+            <path d="M65 36 C82 9 116 0 158 2 C194 4 216 14 221 42 C226 74 229 124 224 156 C220 182 197 205 154 226 C112 246 72 256 48 254 C30 252 27 230 31 196 C37 148 50 64 65 36 Z" fill="#168A9E"/>
+            <path d="M102 172 A22 22 0 0 0 124 150 L124 80 A18 18 0 0 1 142 62 L149 62 A27 32 0 0 1 149 126 L124 126" stroke="#FFFFFF" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="brand">
+          <span class="brand-title">s-proxy</span>
+          <span class="brand-subtitle">${escapeHtml(strings.header.brandSubtitle)}</span>
+        </div>
       </div>
       <div class="status-pills">
         <div class="pill ${snap.hostIspIp ? "pill-safe" : "pill-warn"}">
@@ -269,6 +373,10 @@ function renderTopBar(snap: HubSnapshot): string {
         <div class="pill ${isWireproxyReady ? "pill-safe" : "pill-warn"}">
           <span class="pill-label">${escapeHtml(strings.header.wireproxyCore)}:</span>
           <span>${isWireproxyReady ? escapeHtml(strings.header.ready) : escapeHtml(strings.header.missing)}</span>
+        </div>
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button type="button" class="lang-btn ${currentLanguage === "en" ? "active" : ""}" data-lang="en">EN</button>
+          <button type="button" class="lang-btn ${currentLanguage === "vi" ? "active" : ""}" data-lang="vi">VI</button>
         </div>
       </div>
     </header>
@@ -454,6 +562,15 @@ function renderHubTab(snap: HubSnapshot): string {
     })
     .join("");
 
+  const multiServerOptions = snap.locations
+    .map(
+      (loc) =>
+        `<option value="${escapeHtml(loc.id)}" data-default-name="${escapeHtml(`${loc.countryCode} • ${loc.country} - ${loc.location}`)}">
+          [${escapeHtml(loc.countryCode)}] ${escapeHtml(loc.country)} — ${escapeHtml(loc.location)} (${escapeHtml(loc.connectionName)} • ${loc.load}%)
+        </option>`
+    )
+    .join("");
+
   const modalHtml = isCreateBridgeModalOpen
     ? `
       <div class="modal-backdrop">
@@ -491,7 +608,46 @@ function renderHubTab(snap: HubSnapshot): string {
         </div>
       </div>
     `
-    : "";
+    : isCreateMultiModalOpen
+      ? `
+      <div class="modal-backdrop">
+        <div class="modal-card">
+          <h3>${escapeHtml(strings.hub.modalCreateMultiTitle)}</h3>
+          <form id="create-multi-form">
+            <div class="form-group">
+              <label>${escapeHtml(strings.hub.selectServerLabel)}</label>
+              <select id="multi-slot-location" class="select-input" required>
+                ${multiServerOptions}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>${escapeHtml(strings.hub.slotNameLabel)}</label>
+              <input type="text" id="multi-slot-name" class="text-input" placeholder="Auto-filled from server" />
+            </div>
+            <div class="form-group">
+              <label>${escapeHtml(strings.hub.slotPortLabel)}</label>
+              <input type="number" id="multi-slot-port" class="text-input" placeholder="${snap.settings.basePort + 1}" min="1024" max="65535" />
+              <div class="subtext">${escapeHtml(strings.hub.slotPortHint)}</div>
+            </div>
+            <div class="form-group checkbox-group">
+              <label>
+                <input type="checkbox" id="multi-slot-autostart" checked />
+                ${escapeHtml(strings.hub.autoStartLabel)}
+              </label>
+            </div>
+            <div class="btn-group-right">
+              <button type="button" class="btn btn-secondary" id="btn-cancel-multi-modal">
+                ${escapeHtml(strings.hub.cancelBtn)}
+              </button>
+              <button type="submit" class="btn btn-primary">
+                ${escapeHtml(strings.hub.createBtn)}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `
+      : "";
 
   return `
     <div class="panel">
@@ -499,8 +655,20 @@ function renderHubTab(snap: HubSnapshot): string {
         <button class="btn btn-primary" id="btn-open-create-bridge">
           ${escapeHtml(strings.hub.addAdapterSlot)}
         </button>
-        <button class="btn btn-secondary" id="btn-switch-to-catalog">
+        <button class="btn btn-primary" id="btn-open-create-multi">
           ${escapeHtml(strings.hub.addMultiVpnSlot)}
+        </button>
+        <button class="btn btn-secondary" id="btn-start-all-slots">
+          ${escapeHtml(strings.hub.startAll)}
+        </button>
+        <button class="btn btn-secondary" id="btn-stop-all-slots">
+          ${escapeHtml(strings.hub.stopAll)}
+        </button>
+        <button class="btn btn-secondary" id="btn-check-all-ips">
+          ${escapeHtml(strings.hub.checkAllIps)}
+        </button>
+        <button class="btn btn-secondary" id="btn-copy-all-socks5">
+          ${escapeHtml(strings.hub.copyAllSocks5)}
         </button>
         <button class="btn btn-secondary" id="btn-refresh-system">
           ${escapeHtml(strings.hub.refreshSystem)}
@@ -754,7 +922,12 @@ function renderSettingsTab(snap: HubSnapshot): string {
                 class="text-input mono"
                 placeholder="${escapeHtml(s.hasWgPrivateKey ? s.wgPrivateKeyMasked : strings.settings.wgPrivateKeyPlaceholder)}"
               />
-              <div class="subtext">${escapeHtml(strings.settings.wgPrivateKeyHint)}</div>
+              <div class="subtext-row">
+                <span class="subtext">${escapeHtml(strings.settings.wgPrivateKeyHint)}</span>
+                <button type="button" class="btn btn-sm btn-secondary" id="btn-open-surfshark-web">
+                  ${escapeHtml(strings.settings.openSurfsharkKeyPage)}
+                </button>
+              </div>
             </div>
 
             <div class="form-group">
@@ -819,8 +992,8 @@ function renderSettingsTab(snap: HubSnapshot): string {
             <div class="form-group">
               <label>${escapeHtml(strings.settings.language)}</label>
               <select id="setting-language" class="select-input">
-                <option value="vi" ${s.language === "vi" ? "selected" : ""}>Tiếng Việt (VI)</option>
                 <option value="en" ${s.language === "en" ? "selected" : ""}>English (EN)</option>
+                <option value="vi" ${s.language === "vi" ? "selected" : ""}>Tiếng Việt (VI)</option>
               </select>
             </div>
           </div>
@@ -859,9 +1032,15 @@ function renderSettingsTab(snap: HubSnapshot): string {
           rows="5"
           placeholder="${escapeHtml(strings.settings.importConfPlaceholder)}"
         ></textarea>
-        <button type="button" class="btn btn-secondary" id="btn-import-conf">
-          ${escapeHtml(strings.settings.importConfBtn)}
-        </button>
+        <div class="btn-group-sm">
+          <button type="button" class="btn btn-primary" id="btn-import-conf">
+            ${escapeHtml(strings.settings.importConfBtn)}
+          </button>
+          <button type="button" class="btn btn-secondary" id="btn-upload-conf">
+            ${escapeHtml(strings.settings.uploadConfBtn)}
+          </button>
+          <input type="file" id="conf-file-input" accept=".conf,.txt" style="display:none" />
+        </div>
       </div>
     </div>
   `;
@@ -900,7 +1079,6 @@ function render(): void {
       <main class="main-content">
         ${panelContent}
       </main>
-      <div id="toast-container"></div>
     </div>
   `;
 
@@ -908,6 +1086,16 @@ function render(): void {
 }
 
 function attachEventListeners(): void {
+  // Quick language switcher in header
+  document.querySelectorAll<HTMLButtonElement>(".lang-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const lang = btn.getAttribute("data-lang") as AppLanguage | null;
+      if (lang) {
+        void handleQuickSwitchLanguage(lang);
+      }
+    });
+  });
+
   // Tab switching
   document.querySelectorAll<HTMLButtonElement>(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -924,6 +1112,7 @@ function attachEventListeners(): void {
   if (btnOpenCreateBridge) {
     btnOpenCreateBridge.addEventListener("click", () => {
       isCreateBridgeModalOpen = true;
+      isCreateMultiModalOpen = false;
       render();
     });
   }
@@ -957,11 +1146,73 @@ function attachEventListeners(): void {
     });
   }
 
-  const btnSwitchToCatalog = document.getElementById("btn-switch-to-catalog");
-  if (btnSwitchToCatalog) {
-    btnSwitchToCatalog.addEventListener("click", () => {
-      activeTab = "catalog";
+  const btnOpenCreateMulti = document.getElementById("btn-open-create-multi");
+  if (btnOpenCreateMulti) {
+    btnOpenCreateMulti.addEventListener("click", () => {
+      isCreateMultiModalOpen = true;
+      isCreateBridgeModalOpen = false;
       render();
+    });
+  }
+
+  const btnCancelMultiModal = document.getElementById("btn-cancel-multi-modal");
+  if (btnCancelMultiModal) {
+    btnCancelMultiModal.addEventListener("click", () => {
+      isCreateMultiModalOpen = false;
+      render();
+    });
+  }
+
+  const createMultiForm = document.getElementById("create-multi-form") as HTMLFormElement | null;
+  if (createMultiForm) {
+    createMultiForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const locSelect = document.getElementById("multi-slot-location") as HTMLSelectElement | null;
+      const nameInput = document.getElementById("multi-slot-name") as HTMLInputElement | null;
+      const portInput = document.getElementById("multi-slot-port") as HTMLInputElement | null;
+      const autoStartInput = document.getElementById("multi-slot-autostart") as HTMLInputElement | null;
+
+      const locId = locSelect?.value || "";
+      const selectedOpt = locSelect?.selectedOptions?.[0];
+      const defaultName = selectedOpt?.getAttribute("data-default-name") || "Surfshark WG";
+      const portVal = portInput?.value ? parseInt(portInput.value, 10) : null;
+
+      void handleCreateSlot({
+        name: nameInput?.value.trim() || defaultName,
+        port: portVal && !isNaN(portVal) ? portVal : null,
+        mode: "userspace_wg",
+        locationId: locId,
+        adapterHint: null,
+        autoStart: autoStartInput ? autoStartInput.checked : true,
+      });
+    });
+  }
+
+  const btnStartAll = document.getElementById("btn-start-all-slots");
+  if (btnStartAll) {
+    btnStartAll.addEventListener("click", () => {
+      void handleStartAllSlots();
+    });
+  }
+
+  const btnStopAll = document.getElementById("btn-stop-all-slots");
+  if (btnStopAll) {
+    btnStopAll.addEventListener("click", () => {
+      void handleStopAllSlots();
+    });
+  }
+
+  const btnCheckAllIps = document.getElementById("btn-check-all-ips");
+  if (btnCheckAllIps) {
+    btnCheckAllIps.addEventListener("click", () => {
+      void handleCheckAllSlotIps();
+    });
+  }
+
+  const btnCopyAllSocks5 = document.getElementById("btn-copy-all-socks5");
+  if (btnCopyAllSocks5) {
+    btnCopyAllSocks5.addEventListener("click", () => {
+      void handleCopyAllSocks5();
     });
   }
 
@@ -1169,6 +1420,14 @@ function attachEventListeners(): void {
     });
   }
 
+  // Open Surfshark WireGuard Key Web Page
+  const btnOpenSurfsharkWeb = document.getElementById("btn-open-surfshark-web");
+  if (btnOpenSurfsharkWeb) {
+    btnOpenSurfsharkWeb.addEventListener("click", () => {
+      void openUrl("https://my.surfshark.com/vpn/manual-setup/main/wireguard");
+    });
+  }
+
   // Settings conf import
   const btnImportConf = document.getElementById("btn-import-conf");
   if (btnImportConf) {
@@ -1177,6 +1436,29 @@ function attachEventListeners(): void {
       if (textarea) {
         void handleImportWgConf(textarea.value);
       }
+    });
+  }
+
+  // Direct .conf file picker upload
+  const btnUploadConf = document.getElementById("btn-upload-conf");
+  const confFileInput = document.getElementById("conf-file-input") as HTMLInputElement | null;
+  if (btnUploadConf && confFileInput) {
+    btnUploadConf.addEventListener("click", () => {
+      confFileInput.click();
+    });
+    confFileInput.addEventListener("change", () => {
+      const file = confFileInput.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const content = typeof reader.result === "string" ? reader.result : "";
+        const textarea = document.getElementById("conf-import-textarea") as HTMLTextAreaElement | null;
+        if (textarea) {
+          textarea.value = content;
+        }
+        void handleImportWgConf(content);
+      };
+      reader.readAsText(file);
     });
   }
 }

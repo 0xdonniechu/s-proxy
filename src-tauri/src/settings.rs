@@ -12,8 +12,8 @@ pub const DEFAULT_WG_DNS: &str = "162.252.172.57";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AppLanguage {
-    #[default]
     Vi,
+    #[default]
     En,
 }
 
@@ -47,7 +47,7 @@ impl Default for AppSettings {
             gologin_token: String::new(),
             base_port: DEFAULT_BASE_PORT,
             allow_lan: false,
-            language: AppLanguage::Vi,
+            language: AppLanguage::En,
             wireproxy_path: String::new(),
         }
     }
@@ -91,7 +91,7 @@ impl Default for SettingsUpdatePayload {
             gologin_token: None,
             base_port: DEFAULT_BASE_PORT,
             allow_lan: false,
-            language: AppLanguage::Vi,
+            language: AppLanguage::En,
             wireproxy_path: String::new(),
         }
     }
@@ -421,6 +421,7 @@ mod tests {
             serde_json::from_str(legacy_json).expect("legacy json should load with defaults");
         assert_eq!(loaded.settings.base_port, 10805);
         assert_eq!(loaded.settings.wg_address, DEFAULT_WG_ADDRESS);
+        assert_eq!(loaded.settings.language, AppLanguage::En);
         assert!(!loaded.settings.allow_lan);
 
         let temp_dir = std::env::temp_dir().join(format!("sproxy_test_{}", std::process::id()));

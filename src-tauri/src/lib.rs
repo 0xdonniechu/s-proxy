@@ -704,6 +704,41 @@ async fn toggle_slot(
 }
 
 #[tauri::command]
+async fn start_all_slots(state: State<'_, SharedHub>) -> Result<HubSnapshot, String> {
+    let hub = Arc::clone(&state);
+    let slot_ids: Vec<String> = {
+        let guard = hub.lock().map_err(|_| "State lock poisoned".to_string())?;
+        guard
+            .persisted
+            .slots
+            .iter()
+            .filter(|s| {
+                guard
+                    .runtimes
+                    .get(&s.id)
+                    .map(|r| r.status != SlotRuntimeStatus::Running)
+                    .unwrap_or(true)
+            })
+            .map(|s| s.id.clone())
+            .collect()
+    };
+
+    for sid in slot_ids {
+        let _ = start_slot_internal(&hub, &sid).await;
+    }
+
+    let guard = hub.lock().map_err(|_| "State lock poisoned".to_string())?;
+    Ok(guard.build_snapshot())
+}
+
+#[tauri::command]
+async fn stop_all_slots(state: State<'_, SharedHub>) -> Result<HubSnapshot, String> {
+    let mut guard = state.lock().map_err(|_| "State lock poisoned".to_string())?;
+    guard.stop_all();
+    Ok(guard.build_snapshot())
+}
+
+#[tauri::command]
 async fn delete_slot(
     slot_id: String,
     state: State<'_, SharedHub>,
@@ -940,6 +975,8 @@ pub fn run() {
             import_wg_conf,
             create_slot,
             toggle_slot,
+            start_all_slots,
+            stop_all_slots,
             delete_slot,
             check_slot_ip,
             fetch_gologin_profiles,
