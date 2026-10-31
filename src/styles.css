@@ -57,13 +57,71 @@ body {
   border-bottom: 1px solid var(--border-color);
 }
 
-.brand {
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--text-color);
+.brand-row {
   display: flex;
   align-items: center;
+  gap: 10px;
+}
+
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 2px 6px rgba(22, 138, 158, 0.35));
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.brand-title {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text-color);
+  letter-spacing: -0.01em;
+}
+
+.brand-subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.lang-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lang-btn.active {
+  background-color: #168a9e;
+  color: #ffffff;
+}
+
+.subtext-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
 }
 
 .status-pills {
