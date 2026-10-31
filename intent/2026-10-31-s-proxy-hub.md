@@ -1,5 +1,5 @@
 ---
-status: approved
+status: planned
 ---
 # s-proxy: Hybrid Surfshark VPN Proxy Hub kết nối GoLogin (Windows)
 

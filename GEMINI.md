@@ -10,19 +10,26 @@ A Tauri 2 tray-first app that turns Surfshark VPN into local SOCKS5/HTTP proxy e
 - Package: `npm run tauri build` (not run: scaffold pending)
 - Owner-only on real Windows hardware: live Surfshark adapter egress check, multi-tunnel WireGuard handshake with owner PrivateKey, GoLogin profile launch & browser IP/DNS check (`ipinfo.io`/`whoer.net`), tray close/quit lifecycle.
 
-## HARD: the main session does it directly, then hard-reviewer
-- Proxy egress binding & fail-closed kill-switch: socket binding to Surfshark adapter IP / userspace WireGuard netstack; must never fall back to host default route (`Wi-Fi`/`Ethernet`).
+## Model Economy (Gemini Coding 5.5)
+- **Main session (`Gemini 4 Argon (High)` / `Model: "inherit"`)**: Decides, rates tasks, writes HARD modules directly, gates, commits.
+- **`hard-reviewer` (`Gemini 3.1 Pro Preview` — `Model: "pro"`)**: Independent cross-model review of HARD diffs written by Main (`Gemini 4 Argon High`), avoiding shared blind spots.
+- **`builder` (`Gemini 3.8 Flash` — `Model: "flash"`)**: Implements MEDIUM plan steps (equivalent to Sonnet 5.5).
+- **`reviewer` (`Gemini 4 Argon (High)` — `Model: "inherit"`)**: Independent review of MEDIUM diffs written by `builder` (`3.8 Flash` → reviewed by `4 Argon High`).
+- **`transcriber` (`Gemini 3.5 Flash-Lite` — `Model: "flash_lite"`)**: Mechanical copying, CSS, docs, static assets for EASY steps (equivalent to Haiku 5.5).
+
+## HARD: Main (`Gemini 4 Argon High`) does directly, then `hard-reviewer` (`pro` / 3.1 Pro)
+- Proxy egress binding & fail-closed kill-switch (`IP_UNICAST_IF` socket binding to Surfshark adapter IP / userspace WireGuard; never fall back to host `Wi-Fi`/`Ethernet`).
 - DNS resolution inside proxy slots: SOCKS5 (`ATYP=DOMAIN`) and HTTP `CONNECT` must resolve DNS through the tunnel/remote proxy, never leaking via host DNS.
 - Userspace WireGuard lifecycle, config generation, and credential storage (WireGuard PrivateKey, GoLogin API token).
 - GoLogin API proxy-update payload contract (`PATCH /browser/{id}/proxy`) so existing profile fingerprint settings are never overwritten.
 - Rust/TS IPC contract (`HubSnapshot`, `ProxySlot`, `SettingsPayload`), `capabilities/`, and CSP.
 
-## MEDIUM: builder builds, reviewer reviews
+## MEDIUM: `builder` (`flash` / 3.8 Flash) builds, `reviewer` (`inherit` / 4 Argon High) reviews
 - Surfshark local catalog parser (`general_locations.dat`, `static_locations.dat`) and adapter detector (`Wintun` / `OpenVPN` vs NetBird `wt0`).
 - Proxy health/IP checker (`ipinfo.io` / `api.ipify.org` through each local port) and latency ping.
 - UI views (Proxy Hub table, Surfshark Location Picker, GoLogin Profile Linker, Settings) and tray menu.
 
-## EASY: transcriber or builder, no review
+## EASY: `transcriber` (`flash_lite` / 3.5 Flash-Lite), no review
 - CSS styling, copy-to-clipboard formatting (`socks5://127.0.0.1:port`), labels, README and SPEC prose.
 
 ## Rules
