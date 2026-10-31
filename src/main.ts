@@ -380,8 +380,8 @@ function renderSidebarRail(): string {
     <aside class="sidebar-rail">
       <div class="sidebar-logo" title="s-proxy Hub">
         <svg viewBox="0 0 256 256" width="36" height="36" fill="none">
-          <path d="M65 36 C82 9 116 0 158 2 C194 4 216 14 221 42 C226 74 229 124 224 156 C220 182 197 205 154 226 C112 246 72 256 48 254 C30 252 27 230 31 196 C37 148 50 64 65 36 Z" fill="#168A9E"/>
-          <path d="M102 172 A22 22 0 0 0 124 150 L124 80 A18 18 0 0 1 142 62 L149 62 A27 32 0 0 1 149 126 L124 126" stroke="#FFFFFF" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M191 36 C174 9 140 0 98 2 C62 4 40 14 35 42 C30 74 27 124 32 156 C36 182 59 205 102 226 C144 246 184 256 208 254 C226 252 229 230 225 196 C219 148 206 64 191 36 Z" fill="#2563EB"/>
+          <path d="M94 168 A22 22 0 0 0 116 146 L116 76 A18 18 0 0 1 134 58 L141 58 A27 32 0 0 1 141 122 L116 122" stroke="#FFFFFF" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
 
