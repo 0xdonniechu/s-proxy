@@ -25,6 +25,10 @@ pub enum SlotMode {
     UserspaceWg,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AppSettings {
@@ -36,6 +40,16 @@ pub struct AppSettings {
     pub allow_lan: bool,
     pub language: AppLanguage,
     pub wireproxy_path: String,
+    #[serde(default = "default_true")]
+    pub kill_switch_enabled: bool,
+    #[serde(default = "default_true")]
+    pub dns_leak_protection: bool,
+    #[serde(default = "default_true")]
+    pub ipv6_leak_block: bool,
+    #[serde(default = "default_true")]
+    pub isp_ip_guard: bool,
+    #[serde(default = "default_true")]
+    pub auto_verify_ip: bool,
 }
 
 impl Default for AppSettings {
@@ -49,6 +63,11 @@ impl Default for AppSettings {
             allow_lan: false,
             language: AppLanguage::En,
             wireproxy_path: String::new(),
+            kill_switch_enabled: true,
+            dns_leak_protection: true,
+            ipv6_leak_block: true,
+            isp_ip_guard: true,
+            auto_verify_ip: true,
         }
     }
 }
@@ -67,6 +86,11 @@ pub struct SettingsView {
     pub language: AppLanguage,
     pub wireproxy_path: String,
     pub wireproxy_ready: bool,
+    pub kill_switch_enabled: bool,
+    pub dns_leak_protection: bool,
+    pub ipv6_leak_block: bool,
+    pub isp_ip_guard: bool,
+    pub auto_verify_ip: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -80,6 +104,16 @@ pub struct SettingsUpdatePayload {
     pub allow_lan: bool,
     pub language: AppLanguage,
     pub wireproxy_path: String,
+    #[serde(default = "default_true")]
+    pub kill_switch_enabled: bool,
+    #[serde(default = "default_true")]
+    pub dns_leak_protection: bool,
+    #[serde(default = "default_true")]
+    pub ipv6_leak_block: bool,
+    #[serde(default = "default_true")]
+    pub isp_ip_guard: bool,
+    #[serde(default = "default_true")]
+    pub auto_verify_ip: bool,
 }
 
 impl Default for SettingsUpdatePayload {
@@ -93,6 +127,11 @@ impl Default for SettingsUpdatePayload {
             allow_lan: false,
             language: AppLanguage::En,
             wireproxy_path: String::new(),
+            kill_switch_enabled: true,
+            dns_leak_protection: true,
+            ipv6_leak_block: true,
+            isp_ip_guard: true,
+            auto_verify_ip: true,
         }
     }
 }
@@ -189,6 +228,11 @@ impl AppSettings {
             language: self.language,
             wireproxy_path: self.wireproxy_path.clone(),
             wireproxy_ready,
+            kill_switch_enabled: self.kill_switch_enabled,
+            dns_leak_protection: self.dns_leak_protection,
+            ipv6_leak_block: self.ipv6_leak_block,
+            isp_ip_guard: self.isp_ip_guard,
+            auto_verify_ip: self.auto_verify_ip,
         }
     }
 
@@ -237,6 +281,11 @@ impl AppSettings {
             AppLanguage::En => AppLanguage::En,
         };
         self.wireproxy_path = payload.wireproxy_path.trim().to_string();
+        self.kill_switch_enabled = payload.kill_switch_enabled;
+        self.dns_leak_protection = payload.dns_leak_protection;
+        self.ipv6_leak_block = payload.ipv6_leak_block;
+        self.isp_ip_guard = payload.isp_ip_guard;
+        self.auto_verify_ip = payload.auto_verify_ip;
         Ok(())
     }
 }

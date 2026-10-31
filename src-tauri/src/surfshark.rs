@@ -187,6 +187,9 @@ pub fn classify_adapter(
         || desc_l.contains("surfshark")
         || ipv4.starts_with("10.14.")
         || desc_l.contains("openvpn data channel offload")
+        || (desc_l.contains("wintun userspace tunnel")
+            && name_l != "wt0"
+            && !is_cgnat_ipv4(ipv4))
         || ((desc_l.contains("wintun") || desc_l.contains("openvpn"))
             && (ipv4.starts_with("10.8.") || ipv4.starts_with("10.14.")))
     {

@@ -28,9 +28,13 @@ pub enum UpstreamConfig {
         if_index: u32,
         dns_server: Ipv4Addr,
         primary_isp_ip: Option<Ipv4Addr>,
+        kill_switch_enabled: bool,
+        dns_leak_protection: bool,
+        ipv6_leak_block: bool,
     },
     UpstreamSocks5 {
         proxy_addr: SocketAddr,
+        ipv6_leak_block: bool,
     },
 }
 
@@ -308,24 +312,69 @@ async fn dial_upstream(target: &TargetAddr, upstream: &UpstreamConfig) -> io::Re
             if_index,
             dns_server,
             primary_isp_ip,
+            kill_switch_enabled,
+            dns_leak_protection,
+            ipv6_leak_block,
         } => {
-            validate_adapter_not_leaking(*adapter_ip, *primary_isp_ip)?;
+            if *kill_switch_enabled {
+                validate_adapter_not_leaking(*adapter_ip, *primary_isp_ip)?;
+            }
+            let effective_if_index = if *kill_switch_enabled { *if_index } else { 0 };
             let remote_v4 = match target {
                 TargetAddr::Ip(SocketAddr::V4(v4)) => *v4,
                 TargetAddr::Ip(SocketAddr::V6(_)) => {
+                    if *ipv6_leak_block {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Unsupported,
+                            "IPv6 target disabled on IPv4 VPN adapter bridge to prevent dual-stack leak",
+                        ));
+                    }
                     return Err(io::Error::new(
                         io::ErrorKind::Unsupported,
-                        "IPv6 target disabled on IPv4 VPN adapter bridge to prevent dual-stack leak",
+                        "IPv4 adapter bridge cannot dial raw IPv6 socket",
                     ));
                 }
                 TargetAddr::Domain(host, port) => {
-                    let ip =
-                        resolve_domain_on_adapter(host, *adapter_ip, *if_index, *dns_server).await?;
+                    let ip = if *dns_leak_protection {
+                        resolve_domain_on_adapter(
+                            host,
+                            *adapter_ip,
+                            effective_if_index,
+                            *dns_server,
+                        )
+                        .await?
+                    } else {
+                        match resolve_domain_on_adapter(
+                            host,
+                            *adapter_ip,
+                            effective_if_index,
+                            *dns_server,
+                        )
+                        .await
+                        {
+                            Ok(v4) => v4,
+                            Err(_) => {
+                                let mut addrs =
+                                    tokio::net::lookup_host((host.as_str(), *port)).await?;
+                                addrs
+                                    .find_map(|sa| match sa {
+                                        SocketAddr::V4(v4) => Some(*v4.ip()),
+                                        SocketAddr::V6(_) => None,
+                                    })
+                                    .ok_or_else(|| {
+                                        io::Error::new(
+                                            io::ErrorKind::NotFound,
+                                            "No IPv4 address resolved",
+                                        )
+                                    })?
+                            }
+                        }
+                    };
                     SocketAddrV4::new(ip, *port)
                 }
             };
 
-            let sock = create_bound_tcp_socket(*adapter_ip, *if_index)?;
+            let sock = create_bound_tcp_socket(*adapter_ip, effective_if_index)?;
             let std_stream: std::net::TcpStream = match sock.connect(&SockAddr::from(remote_v4)) {
                 Ok(()) => sock.into(),
                 Err(e)
@@ -346,7 +395,16 @@ async fn dial_upstream(target: &TargetAddr, upstream: &UpstreamConfig) -> io::Re
             }
             Ok(stream)
         }
-        UpstreamConfig::UpstreamSocks5 { proxy_addr } => {
+        UpstreamConfig::UpstreamSocks5 {
+            proxy_addr,
+            ipv6_leak_block,
+        } => {
+            if *ipv6_leak_block && matches!(target, TargetAddr::Ip(SocketAddr::V6(_))) {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "IPv6 target blocked by IPv6 Leak Blocker",
+                ));
+            }
             let mut stream = timeout(CONNECT_TIMEOUT, TcpStream::connect(proxy_addr))
                 .await
                 .map_err(|_| {
@@ -682,11 +740,14 @@ pub async fn start_proxy_listener(
     if let UpstreamConfig::AdapterBridge {
         adapter_ip,
         primary_isp_ip,
+        kill_switch_enabled,
         ..
     } = &upstream
     {
-        validate_adapter_not_leaking(*adapter_ip, *primary_isp_ip)
-            .map_err(|e| e.to_string())?;
+        if *kill_switch_enabled {
+            validate_adapter_not_leaking(*adapter_ip, *primary_isp_ip)
+                .map_err(|e| e.to_string())?;
+        }
     }
 
     let bind_addr = SocketAddr::V4(SocketAddrV4::new(bind_ip, port));
