@@ -59,6 +59,9 @@ export interface SurfsharkLocation {
   connectionName: string;
   pubKey: string;
   locationType: LocationType;
+  tzGroup: string;
+  utcOffset: string;
+  ianaTimezone: string;
 }
 
 export interface GoLoginProfileSummary {
@@ -118,6 +121,9 @@ export interface ProxySlotView {
   countryCode: string;
   locationLabel: string;
   connectionName: string;
+  tzGroup: string;
+  utcOffset: string;
+  ianaTimezone: string;
   adapterHint: string;
   boundAdapterName: string;
   boundAdapterIp: string;

@@ -24,6 +24,7 @@ let activeTab: "hub" | "status" | "catalog" | "providers" | "gologin" | "setting
 let catalogSearchQuery = "";
 let catalogFilterType: "all" | "generic" | "static" = "all";
 let catalogProviderFilter: "all" | VpnProvider = "all";
+let catalogTzFilter: string = "all";
 
 // GoLogin assignment selection state: profileId -> slotId
 const gologinSlotSelection: Record<string, string> = {};
@@ -81,44 +82,117 @@ function renderFlagBadge(countryCode: string): string {
   return `<span class="flag-badge" aria-label="${escapeHtml(code)}">${escapeHtml(code)}</span>`;
 }
 
-function getLocationTimezoneMeta(loc: SurfsharkLocation): {
-  tier: 0 | 1 | 2 | 3;
+function getTimezoneGroupInfo(
+  tzGroup: string,
+  utcOffset = "",
+  ianaTimezone = ""
+): {
+  shortPill: string;
   tzBadge: string;
   groupLabel: string;
 } {
   const isVi = currentLanguage === "vi";
-  if (loc.region === "Custom") {
-    return {
-      tier: 0,
-      tzBadge: isVi ? "Tùy chỉnh" : "Custom",
-      groupLabel: isVi ? "⚙ Máy chủ Tùy chỉnh (.conf)" : "⚙ Custom Imported Servers (.conf)",
-    };
+  switch (tzGroup) {
+    case "asia_utc7":
+      return {
+        shortPill: "🇻🇳 UTC+7 (SEA)",
+        tzBadge: "UTC+7 • Asia/Ho_Chi_Minh",
+        groupLabel: isVi
+          ? "🇻🇳 UTC+7 (Asia/Ho_Chi_Minh) — Đông Nam Á (Việt Nam, Thái Lan, Indonesia, Campuchia)"
+          : "🇻🇳 UTC+7 (Asia/Ho_Chi_Minh) — Southeast Asia (Vietnam, Thailand, Indonesia, Cambodia)",
+      };
+    case "asia_utc8":
+      return {
+        shortPill: "🇸🇬 UTC+8 (APAC)",
+        tzBadge: "UTC+8 • Asia/Singapore",
+        groupLabel: isVi
+          ? "🇸🇬 UTC+8 (Asia/Singapore) — Hub Cáp Biển Châu Á & Tây Úc (Singapore, HK, Đài Loan, Malaysia, Perth)"
+          : "🇸🇬 UTC+8 (Asia/Singapore) — APAC Cable Hubs & WA (Singapore, HK, Taiwan, Malaysia, Perth)",
+      };
+    case "asia_utc9":
+      return {
+        shortPill: "🇯🇵 UTC+9 (JP/KR)",
+        tzBadge: "UTC+9 • Asia/Tokyo",
+        groupLabel: isVi
+          ? "🇯🇵 UTC+9 (Asia/Tokyo) — Đông Á Băng Thông Lớn (Nhật Bản, Hàn Quốc)"
+          : "🇯🇵 UTC+9 (Asia/Tokyo) — East Asia High-Speed Backbone (Japan, South Korea)",
+      };
+    case "us_east":
+      return {
+        shortPill: "🇺🇸 UTC-5 (US East)",
+        tzBadge: "UTC-5 • America/New_York",
+        groupLabel: isVi
+          ? "🇺🇸 UTC-5 (America/New_York) — Hoa Kỳ & Canada Bờ Đông (NY, Miami, Atlanta, Ashburn, Boston, Toronto)"
+          : "🇺🇸 UTC-5 (America/New_York) — US & Canada East Coast (NY, Miami, Atlanta, Ashburn, Boston, Toronto)",
+      };
+    case "us_central":
+      return {
+        shortPill: "🇺🇸 UTC-6 (US Central)",
+        tzBadge: "UTC-6 • America/Chicago",
+        groupLabel: isVi
+          ? "🇺🇸 UTC-6 (America/Chicago) — Hoa Kỳ Miền Trung (Dallas, Houston, Chicago, Nashville, Omaha, Kansas)"
+          : "🇺🇸 UTC-6 (America/Chicago) — US Central (Dallas, Houston, Chicago, Nashville, Omaha, Kansas)",
+      };
+    case "us_mountain":
+      return {
+        shortPill: "🇺🇸 UTC-7 (US Mountain)",
+        tzBadge: "UTC-7 • America/Denver",
+        groupLabel: isVi
+          ? "🇺🇸 UTC-7 (America/Denver) — Hoa Kỳ Miền Núi (Denver, Salt Lake City, Phoenix)"
+          : "🇺🇸 UTC-7 (America/Denver) — US Mountain (Denver, Salt Lake City, Phoenix)",
+      };
+    case "us_west":
+      return {
+        shortPill: "🇺🇸 UTC-8 (US West)",
+        tzBadge: "UTC-8 • America/Los_Angeles",
+        groupLabel: isVi
+          ? "🇺🇸 UTC-8 (America/Los_Angeles) — Hoa Kỳ & Canada Bờ Tây (LA, Seattle, San Jose, SF, Las Vegas, Vancouver)"
+          : "🇺🇸 UTC-8 (America/Los_Angeles) — US & Canada West Coast (LA, Seattle, San Jose, SF, Las Vegas, Vancouver)",
+      };
+    case "eu_west":
+      return {
+        shortPill: "🇬🇧 UTC+0 (UK/IE)",
+        tzBadge: "UTC+0 • Europe/London",
+        groupLabel: isVi
+          ? "🇬🇧 UTC+0 (Europe/London) — Anh Quốc & Ireland (London, Manchester, Glasgow, Dublin)"
+          : "🇬🇧 UTC+0 (Europe/London) — UK & Ireland (London, Manchester, Glasgow, Dublin)",
+      };
+    case "eu_central":
+      return {
+        shortPill: "🇩🇪 UTC+1 (EU Central)",
+        tzBadge: "UTC+1 • Europe/Berlin",
+        groupLabel: isVi
+          ? "🇩🇪 UTC+1 (Europe/Berlin) — Trung Âu (Frankfurt, Amsterdam, Paris, Zurich, Milan, Madrid)"
+          : "🇩🇪 UTC+1 (Europe/Berlin) — Central Europe (Frankfurt, Amsterdam, Paris, Zurich, Milan, Madrid)",
+      };
+    case "au_east":
+      return {
+        shortPill: "🇦🇺 UTC+10 (AU East)",
+        tzBadge: "UTC+10 • Australia/Sydney",
+        groupLabel: isVi
+          ? "🇦🇺 UTC+10 (Australia/Sydney) — Đông Úc (Sydney, Melbourne, Brisbane)"
+          : "🇦🇺 UTC+10 (Australia/Sydney) — Australia East (Sydney, Melbourne, Brisbane)",
+      };
+    default:
+      return {
+        shortPill: "⚙ Custom",
+        tzBadge: utcOffset && ianaTimezone ? `${utcOffset} • ${ianaTimezone}` : isVi ? "Tùy chỉnh" : "Custom",
+        groupLabel: isVi ? "⚙ Máy chủ Tùy chỉnh (.conf)" : "⚙ Custom Imported Servers (.conf)",
+      };
   }
-  const cc = (loc.countryCode || "").toUpperCase();
-  if (["VN", "TH", "ID", "KH", "LA"].includes(cc)) {
-    return {
-      tier: 1,
-      tzBadge: isVi ? "UTC+7 • Cùng múi giờ" : "UTC+7 • Same TZ",
-      groupLabel: isVi
-        ? "🕒 UTC+7 — Cùng múi giờ (Việt Nam, Thái Lan, ĐNÁ)"
-        : "🕒 UTC+7 — Same Timezone (Vietnam, Thailand, SEA)",
-    };
-  }
-  if (["SG", "HK", "TW", "MY", "PH", "MO"].includes(cc)) {
-    return {
-      tier: 2,
-      tzBadge: isVi ? "UTC+8 • Hub Cáp biển" : "UTC+8 • Cable Hub",
-      groupLabel: isVi
-        ? "⚡ UTC+8 — Cận múi giờ & Cáp biển nhanh (Singapore, HK, Đài Loan)"
-        : "⚡ UTC+8 — Nearby Tier-1 Cable Hubs (Singapore, HK, Taiwan)",
-    };
-  }
+}
+
+function getLocationTimezoneMeta(loc: SurfsharkLocation): {
+  tzGroup: string;
+  shortPill: string;
+  tzBadge: string;
+  groupLabel: string;
+} {
+  const tzGroup = loc.tzGroup || "custom";
+  const info = getTimezoneGroupInfo(tzGroup, loc.utcOffset, loc.ianaTimezone);
   return {
-    tier: 3,
-    tzBadge: isVi ? "UTC+9 • Trục Đông Á" : "UTC+9 • East Asia",
-    groupLabel: isVi
-      ? "🚀 UTC+9 — Trục Đông Á băng thông lớn (Nhật Bản, Hàn Quốc)"
-      : "🚀 UTC+9 — East Asia High-Speed Backbone (Japan, South Korea)",
+    tzGroup,
+    ...info,
   };
 }
 
@@ -335,6 +409,32 @@ async function handleCheckSlotIp(slotId: string): Promise<void> {
     }
   } catch (err) {
     showToast(`Error: ${String(err)}`);
+  }
+}
+
+async function handleSwitchSlotLocation(slotId: string, locationId: string): Promise<void> {
+  if (!slotId || !locationId) return;
+  showToast(
+    currentLanguage === "vi"
+      ? "Đang chuyển sang máy chủ mới cùng múi giờ..."
+      : "Switching to backup server in the same timezone..."
+  );
+  try {
+    const res = await invoke<HubSnapshot>("switch_slot_location", { slotId, locationId });
+    applySnapshot(res);
+    showToast(
+      currentLanguage === "vi"
+        ? "Đã chuyển máy chủ cùng múi giờ thành công!"
+        : "Switched to same-timezone server!"
+    );
+    const updatedSlot = res.slots.find((s) => s.id === slotId);
+    if (updatedSlot && updatedSlot.status === "running" && res.settings.autoVerifyIp) {
+      window.setTimeout(() => {
+        void handleCheckSlotIp(slotId);
+      }, 500);
+    }
+  } catch (err) {
+    showToast(`Switch Error: ${String(err)}`);
   }
 }
 
@@ -645,6 +745,39 @@ function renderHubTab(snap: HubSnapshot): string {
                 ? "⚡"
                 : `🌐 ${escapeHtml(slot.countryCode || "")}`;
 
+            const slotTzInfo =
+              slot.mode === "userspace_wg" && slot.tzGroup
+                ? getTimezoneGroupInfo(slot.tzGroup, slot.utcOffset, slot.ianaTimezone)
+                : null;
+
+            const sameTzAlternatives =
+              slot.mode === "userspace_wg" && slot.tzGroup
+                ? snap.locations.filter(
+                    (l) => l.tzGroup === slot.tzGroup && l.provider === slot.provider
+                  )
+                : [];
+
+            const sameTzSwitcherHtml =
+              slot.mode === "userspace_wg" && sameTzAlternatives.length > 1
+                ? `<div class="slot-subtext subtext" style="margin-top:4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                     <span class="badge badge-os mono" title="${escapeHtml(slotTzInfo?.groupLabel || "")}">🕒 ${escapeHtml(slotTzInfo?.tzBadge || "")}</span>
+                     <select class="select-input select-same-tz-switch" data-slot-id="${escapeHtml(slot.id)}" style="height:26px; font-size:12px; padding:2px 8px; max-width:270px;" title="${currentLanguage === "vi" ? "Đổi nhanh sang máy chủ khác cùng múi giờ khi VPN lag/die" : "Failover to another server in the exact same timezone"}">
+                       ${sameTzAlternatives
+                         .map(
+                           (alt) =>
+                             `<option value="${escapeHtml(alt.id)}" ${alt.id === slot.locationId || alt.connectionName === slot.connectionName ? "selected" : ""}>
+                               🔄 [${escapeHtml(alt.countryCode)}] ${escapeHtml(alt.location)}${alt.locationType === "static" ? " (Static)" : ""} • ${alt.load}% load
+                             </option>`
+                         )
+                         .join("")}
+                     </select>
+                   </div>`
+                : slotTzInfo
+                  ? `<div class="slot-subtext subtext" style="margin-top:4px;">
+                       <span class="badge badge-os mono">🕒 ${escapeHtml(slotTzInfo.tzBadge)}</span>
+                     </div>`
+                  : "";
+
             return `
               <div class="surf-card slot-card" data-slot-id="${escapeHtml(slot.id)}">
                 <div class="slot-block-left">
@@ -662,6 +795,7 @@ function renderHubTab(snap: HubSnapshot): string {
                       <span class="bullet">&bull;</span>
                       <span class="mono">${escapeHtml(slot.connectionName || slot.boundAdapterName || slot.adapterHint || "auto")}</span>
                     </div>
+                    ${sameTzSwitcherHtml}
                   </div>
                 </div>
 
@@ -1143,14 +1277,65 @@ function renderCatalogTab(snap: HubSnapshot): string {
     if (catalogFilterType !== "all" && loc.locationType !== catalogFilterType) {
       return false;
     }
+    if (catalogTzFilter !== "all" && (loc.tzGroup || "custom") !== catalogTzFilter) {
+      return false;
+    }
     if (!query) return true;
     return (
       loc.country.toLowerCase().includes(query) ||
       loc.location.toLowerCase().includes(query) ||
       loc.connectionName.toLowerCase().includes(query) ||
-      loc.countryCode.toLowerCase().includes(query)
+      loc.countryCode.toLowerCase().includes(query) ||
+      (loc.ianaTimezone || "").toLowerCase().includes(query) ||
+      (loc.utcOffset || "").toLowerCase().includes(query)
     );
   });
+
+  // Available timezone groups for filter pills
+  const tzCounts = new Map<string, number>();
+  for (const loc of snap.locations) {
+    if (catalogProviderFilter !== "all" && loc.provider !== catalogProviderFilter) continue;
+    const g = loc.tzGroup || "custom";
+    tzCounts.set(g, (tzCounts.get(g) || 0) + 1);
+  }
+  const orderedTzGroups = [
+    "asia_utc7",
+    "asia_utc8",
+    "asia_utc9",
+    "us_east",
+    "us_central",
+    "us_mountain",
+    "us_west",
+    "eu_west",
+    "eu_central",
+    "au_east",
+    "custom",
+  ].filter((g) => (tzCounts.get(g) || 0) > 0);
+
+  const tzFilterPillsHtml = [
+    {
+      id: "all",
+      label:
+        currentLanguage === "vi"
+          ? `🕒 Tất cả Múi giờ (${snap.locations.length})`
+          : `🕒 All Timezones (${snap.locations.length})`,
+    },
+    ...orderedTzGroups.map((g) => {
+      const info = getTimezoneGroupInfo(g);
+      return {
+        id: g,
+        label: `${info.shortPill} (${tzCounts.get(g) || 0})`,
+      };
+    }),
+  ]
+    .map(
+      (tz) => `
+      <button type="button" class="pill-tab catalog-tz-tab ${catalogTzFilter === tz.id ? "active" : ""}" data-tz="${escapeHtml(tz.id)}">
+        ${escapeHtml(tz.label)}
+      </button>
+    `
+    )
+    .join("");
 
   // Recommended for you: Best Same-Timezone (UTC+7) & Lowest-load APAC Cable Hub (UTC+8)
   let fastestLoc: SurfsharkLocation | null = null;
@@ -1198,56 +1383,89 @@ function renderCatalogTab(snap: HubSnapshot): string {
     )
     .join("");
 
-  const locationCards =
-    filtered.length === 0
-      ? `<div class="empty-card" style="grid-column: 1 / -1;">${escapeHtml(strings.catalog.noServersMatch)}</div>`
-      : filtered
-          .map((loc: SurfsharkLocation) => {
-            const loadClass = loc.load > 70 ? "load-high" : loc.load > 40 ? "load-med" : "load-low";
-            const provShort = loc.provider.toUpperCase();
-            const isCustomLoc = loc.region === "Custom";
-            const tzMeta = getLocationTimezoneMeta(loc);
-            const typeBadge =
-              loc.locationType === "static"
-                ? `<span class="badge badge-os mono" style="font-size:10px;padding:1px 6px;">Static IP</span>`
-                : "";
-            return `
-              <div class="surf-card location-card">
-                <div class="loc-card-main">
-                  <div class="loc-flag-col">
-                    ${renderFlagBadge(loc.countryCode)}
-                  </div>
-                  <div class="loc-info-col">
-                    <div class="loc-country">${escapeHtml(loc.country)} ${typeBadge}</div>
-                    <div class="loc-city">${escapeHtml(loc.location)} &bull; <span class="mono">${escapeHtml(tzMeta.tzBadge)}</span></div>
-                  </div>
-                  <div class="loc-load-col">
-                    <span class="load-pill ${loadClass}">${loc.load}%</span>
-                  </div>
-                </div>
-                <div class="loc-card-footer">
-                  <span class="mono subtext-sm">[${escapeHtml(provShort)}] ${escapeHtml(loc.connectionName)}</span>
-                  <div style="display:flex; gap:6px; align-items:center;">
-                    ${
-                      isCustomLoc
-                        ? `<button type="button" class="btn btn-sm btn-danger btn-delete-custom-server" data-provider="${escapeHtml(loc.provider)}" data-loc-id="${escapeHtml(loc.id)}" title="Delete">✕</button>`
-                        : ""
-                    }
-                    <button type="button" class="btn btn-sm btn-primary btn-create-location-slot" data-loc-id="${escapeHtml(loc.id)}" data-loc-label="${escapeHtml(`${loc.countryCode} • ${loc.country} - ${loc.location}`)}">
-                      ${escapeHtml(strings.catalog.createAndStart)}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            `;
-          })
-          .join("");
+  const renderLocationCard = (loc: SurfsharkLocation): string => {
+    const loadClass = loc.load > 70 ? "load-high" : loc.load > 40 ? "load-med" : "load-low";
+    const provShort = loc.provider.toUpperCase();
+    const isCustomLoc = loc.region === "Custom";
+    const tzMeta = getLocationTimezoneMeta(loc);
+    const typeBadge =
+      loc.locationType === "static"
+        ? `<span class="badge badge-os mono" style="font-size:10px;padding:1px 6px;">Static IP</span>`
+        : "";
+    return `
+      <div class="surf-card location-card">
+        <div class="loc-card-main">
+          <div class="loc-flag-col">
+            ${renderFlagBadge(loc.countryCode)}
+          </div>
+          <div class="loc-info-col">
+            <div class="loc-country">${escapeHtml(loc.country)} ${typeBadge}</div>
+            <div class="loc-city"><strong>${escapeHtml(loc.location)}</strong> &bull; <span class="mono">${escapeHtml(tzMeta.tzBadge)}</span></div>
+          </div>
+          <div class="loc-load-col">
+            <span class="load-pill ${loadClass}">${loc.load}%</span>
+          </div>
+        </div>
+        <div class="loc-card-footer">
+          <span class="mono subtext-sm">[${escapeHtml(provShort)}] ${escapeHtml(loc.connectionName)}</span>
+          <div style="display:flex; gap:6px; align-items:center;">
+            ${
+              isCustomLoc
+                ? `<button type="button" class="btn btn-sm btn-danger btn-delete-custom-server" data-provider="${escapeHtml(loc.provider)}" data-loc-id="${escapeHtml(loc.id)}" title="Delete">✕</button>`
+                : ""
+            }
+            <button type="button" class="btn btn-sm btn-primary btn-create-location-slot" data-loc-id="${escapeHtml(loc.id)}" data-loc-label="${escapeHtml(`${loc.countryCode} • ${loc.country} - ${loc.location}`)}">
+              ${escapeHtml(strings.catalog.createAndStart)}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  };
+
+  let groupedSectionsHtml = "";
+  if (filtered.length === 0) {
+    groupedSectionsHtml = `<div class="empty-card">${escapeHtml(strings.catalog.noServersMatch)}</div>`;
+  } else {
+    const byTz = new Map<string, SurfsharkLocation[]>();
+    for (const loc of filtered) {
+      const g = loc.tzGroup || "custom";
+      const arr = byTz.get(g) || [];
+      arr.push(loc);
+      byTz.set(g, arr);
+    }
+    for (const [tzGroup, locs] of byTz.entries()) {
+      const info = getTimezoneGroupInfo(tzGroup, locs[0]?.utcOffset, locs[0]?.ianaTimezone);
+      const countLabel =
+        currentLanguage === "vi"
+          ? `${locs.length} máy chủ cùng múi giờ (Chuyển đổi dự phòng an toàn)`
+          : `${locs.length} same-timezone nodes (Safe failover pool)`;
+      groupedSectionsHtml += `
+        <div class="locations-section" style="margin-bottom: 18px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+            <div class="section-title-sm" style="margin-bottom:0;">${escapeHtml(info.groupLabel)}</div>
+            <span class="badge badge-safe mono">${escapeHtml(countLabel)}</span>
+          </div>
+          <div class="locations-grid">
+            ${locs.map(renderLocationCard).join("")}
+          </div>
+        </div>
+      `;
+    }
+  }
 
   return `
     <!-- Multi-Provider Filter Bar -->
     <div class="provider-filter-bar">
       <div class="pill-tabs" role="tablist">
         ${providerTabsHtml}
+      </div>
+    </div>
+
+    <!-- Timezone Classification Filter Bar -->
+    <div class="provider-filter-bar" style="margin-top: -4px;">
+      <div class="pill-tabs" role="tablist" style="flex-wrap: wrap;">
+        ${tzFilterPillsHtml}
       </div>
     </div>
 
@@ -1329,13 +1547,8 @@ function renderCatalogTab(snap: HubSnapshot): string {
       </div>
     </div>
 
-    <!-- All Locations 3-Column Grid -->
-    <div class="locations-section">
-      <div class="section-title-sm">${escapeHtml(strings.catalog.allLocations)}</div>
-      <div class="locations-grid">
-        ${locationCards}
-      </div>
-    </div>
+    <!-- Grouped By Exact Timezone Sections -->
+    ${groupedSectionsHtml}
   `;
 }
 
@@ -1989,6 +2202,17 @@ function attachEventListeners(): void {
     });
   });
 
+  // Hub same-timezone server failover switcher
+  document.querySelectorAll<HTMLSelectElement>(".select-same-tz-switch").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      const slotId = sel.getAttribute("data-slot-id");
+      const newLocId = sel.value;
+      if (slotId && newLocId) {
+        void handleSwitchSlotLocation(slotId, newLocId);
+      }
+    });
+  });
+
   // Hub GoLogin profile selector change
   document.querySelectorAll<HTMLSelectElement>(".select-hub-profile").forEach((sel) => {
     sel.addEventListener("change", () => {
@@ -2052,6 +2276,17 @@ function attachEventListeners(): void {
       const prov = btn.getAttribute("data-provider") as typeof catalogProviderFilter | null;
       if (prov) {
         catalogProviderFilter = prov;
+        render();
+      }
+    });
+  });
+
+  // Catalog timezone group filter pill tabs
+  document.querySelectorAll<HTMLButtonElement>(".catalog-tz-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tz = btn.getAttribute("data-tz");
+      if (tz) {
+        catalogTzFilter = tz;
         render();
       }
     });

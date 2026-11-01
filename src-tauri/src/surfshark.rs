@@ -23,6 +23,12 @@ pub struct SurfsharkLocation {
     pub connection_name: String,
     pub pub_key: String,
     pub location_type: LocationType,
+    #[serde(default)]
+    pub tz_group: String,
+    #[serde(default)]
+    pub utc_offset: String,
+    #[serde(default)]
+    pub iana_timezone: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,6 +54,232 @@ struct RawLocationEntry {
     pub_key: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TimezoneMeta {
+    pub sort_order: u8,
+    pub tz_group: &'static str,
+    pub utc_offset: &'static str,
+    pub iana_timezone: &'static str,
+}
+
+/// Classifies a VPN server location into an exact timezone group so multi-timezone countries
+/// (United States, Canada, Australia) are strictly separated by city/state timezone.
+/// Returns `None` for non-priority countries so only high-quality locations are displayed.
+pub fn classify_location_timezone(
+    country_code: &str,
+    location: &str,
+    connection_name: &str,
+    region: &str,
+) -> Option<TimezoneMeta> {
+    if region.eq_ignore_ascii_case("Custom") {
+        return Some(TimezoneMeta {
+            sort_order: 0,
+            tz_group: "custom",
+            utc_offset: "Custom",
+            iana_timezone: "Custom/WireGuard",
+        });
+    }
+
+    let cc = country_code.trim().to_ascii_uppercase();
+    let city = location.trim().to_ascii_lowercase();
+    let conn = connection_name.trim().to_ascii_lowercase();
+
+    match cc.as_str() {
+        // 1. Southeast Asia (UTC+7 — Asia/Ho_Chi_Minh)
+        "VN" | "TH" | "ID" | "KH" => Some(TimezoneMeta {
+            sort_order: 1,
+            tz_group: "asia_utc7",
+            utc_offset: "UTC+7",
+            iana_timezone: "Asia/Ho_Chi_Minh",
+        }),
+        // 2. APAC Submarine Cable Hubs (UTC+8 — Asia/Singapore)
+        "SG" | "HK" | "TW" | "MY" | "PH" => Some(TimezoneMeta {
+            sort_order: 2,
+            tz_group: "asia_utc8",
+            utc_offset: "UTC+8",
+            iana_timezone: "Asia/Singapore",
+        }),
+        // 3. East Asia Backbone (UTC+9 — Asia/Tokyo)
+        "JP" | "KR" => Some(TimezoneMeta {
+            sort_order: 3,
+            tz_group: "asia_utc9",
+            utc_offset: "UTC+9",
+            iana_timezone: "Asia/Tokyo",
+        }),
+        // 4-7. United States & Canada — split strictly by city/state timezone!
+        "US" | "CA" => {
+            if city.contains("new york")
+                || city.contains("ashburn")
+                || city.contains("atlanta")
+                || city.contains("miami")
+                || city.contains("boston")
+                || city.contains("charlotte")
+                || city.contains("buffalo")
+                || city.contains("detroit")
+                || city.contains("latham")
+                || city.contains("orlando")
+                || city.contains("tampa")
+                || city.contains("philadelphia")
+                || city.contains("washington")
+                || city.contains("newark")
+                || city.contains("secaucus")
+                || city.contains("raleigh")
+                || city.contains("manassas")
+                || city.contains("mclean")
+                || city.contains("baltimore")
+                || city.contains("pittsburgh")
+                || city.contains("columbus")
+                || city.contains("toronto")
+                || city.contains("montreal")
+                || conn.starts_with("us-nyc")
+                || conn.starts_with("us-ash")
+                || conn.starts_with("us-atl")
+                || conn.starts_with("us-mia")
+                || conn.starts_with("us-bos")
+                || conn.starts_with("us-clt")
+                || conn.starts_with("us-buf")
+                || conn.starts_with("us-dtw")
+                || conn.starts_with("us-ltm")
+                || conn.starts_with("ca-tor")
+                || conn.starts_with("ca-mon")
+            {
+                Some(TimezoneMeta {
+                    sort_order: 4,
+                    tz_group: "us_east",
+                    utc_offset: "UTC-5",
+                    iana_timezone: "America/New_York",
+                })
+            } else if city.contains("chicago")
+                || city.contains("dallas")
+                || city.contains("houston")
+                || city.contains("nashville")
+                || city.contains("omaha")
+                || city.contains("kansas")
+                || city.contains("st. louis")
+                || city.contains("saint louis")
+                || city.contains("minneapolis")
+                || city.contains("austin")
+                || city.contains("san antonio")
+                || city.contains("new orleans")
+                || city.contains("milwaukee")
+                || city.contains("winnipeg")
+                || conn.starts_with("us-chi")
+                || conn.starts_with("us-dal")
+                || conn.starts_with("us-hou")
+                || conn.starts_with("us-bna")
+                || conn.starts_with("us-oma")
+                || conn.starts_with("us-kan")
+                || conn.starts_with("us-stl")
+            {
+                Some(TimezoneMeta {
+                    sort_order: 5,
+                    tz_group: "us_central",
+                    utc_offset: "UTC-6",
+                    iana_timezone: "America/Chicago",
+                })
+            } else if city.contains("denver")
+                || city.contains("salt lake")
+                || city.contains("phoenix")
+                || city.contains("albuquerque")
+                || city.contains("boise")
+                || city.contains("calgary")
+                || city.contains("edmonton")
+                || conn.starts_with("us-den")
+                || conn.starts_with("us-slc")
+                || conn.starts_with("us-phx")
+            {
+                Some(TimezoneMeta {
+                    sort_order: 6,
+                    tz_group: "us_mountain",
+                    utc_offset: "UTC-7",
+                    iana_timezone: "America/Denver",
+                })
+            } else if city.contains("los angeles")
+                || city.contains("seattle")
+                || city.contains("san francisco")
+                || city.contains("san jose")
+                || city.contains("bend")
+                || city.contains("las vegas")
+                || city.contains("portland")
+                || city.contains("san diego")
+                || city.contains("sacramento")
+                || city.contains("santa clara")
+                || city.contains("vancouver")
+                || conn.starts_with("us-lax")
+                || conn.starts_with("us-sea")
+                || conn.starts_with("us-sfo")
+                || conn.starts_with("us-sjc")
+                || conn.starts_with("us-bdn")
+                || conn.starts_with("us-las")
+                || conn.starts_with("ca-van")
+            {
+                Some(TimezoneMeta {
+                    sort_order: 7,
+                    tz_group: "us_west",
+                    utc_offset: "UTC-8",
+                    iana_timezone: "America/Los_Angeles",
+                })
+            } else {
+                None
+            }
+        }
+        // 8. UK & Ireland (UTC+0 — Europe/London)
+        "GB" | "IE" => Some(TimezoneMeta {
+            sort_order: 8,
+            tz_group: "eu_west",
+            utc_offset: "UTC+0",
+            iana_timezone: "Europe/London",
+        }),
+        // 9. Central Europe (UTC+1 — Europe/Berlin)
+        "DE" | "NL" | "FR" | "CH" | "BE" | "AT" | "IT" | "ES" | "SE" => Some(TimezoneMeta {
+            sort_order: 9,
+            tz_group: "eu_central",
+            utc_offset: "UTC+1",
+            iana_timezone: "Europe/Berlin",
+        }),
+        // 10. Australia — split Perth (UTC+8) vs Sydney/Melbourne/Brisbane (UTC+10)
+        "AU" => {
+            if city.contains("perth") || conn.starts_with("au-per") {
+                Some(TimezoneMeta {
+                    sort_order: 2,
+                    tz_group: "asia_utc8",
+                    utc_offset: "UTC+8",
+                    iana_timezone: "Asia/Singapore",
+                })
+            } else if city.contains("sydney")
+                || city.contains("melbourne")
+                || city.contains("brisbane")
+                || conn.starts_with("au-syd")
+                || conn.starts_with("au-mel")
+                || conn.starts_with("au-bne")
+            {
+                Some(TimezoneMeta {
+                    sort_order: 10,
+                    tz_group: "au_east",
+                    utc_offset: "UTC+10",
+                    iana_timezone: "Australia/Sydney",
+                })
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+pub fn populate_location_timezone(loc: &mut SurfsharkLocation) -> Option<TimezoneMeta> {
+    let meta = classify_location_timezone(
+        &loc.country_code,
+        &loc.location,
+        &loc.connection_name,
+        &loc.region,
+    )?;
+    loc.tz_group = meta.tz_group.to_string();
+    loc.utc_offset = meta.utc_offset.to_string();
+    loc.iana_timezone = meta.iana_timezone.to_string();
+    Some(meta)
+}
+
 pub fn parse_locations_json(
     raw: &str,
     location_type: LocationType,
@@ -66,7 +298,7 @@ pub fn parse_locations_json(
             } else {
                 location_type
             };
-            SurfsharkLocation {
+            let mut loc = SurfsharkLocation {
                 id: e.id,
                 provider: crate::providers::VpnProvider::Surfshark,
                 country: e.country,
@@ -77,7 +309,12 @@ pub fn parse_locations_json(
                 connection_name: e.connection_name,
                 pub_key: e.pub_key,
                 location_type: loc_type,
-            }
+                tz_group: String::new(),
+                utc_offset: String::new(),
+                iana_timezone: String::new(),
+            };
+            let _ = populate_location_timezone(&mut loc);
+            loc
         })
         .collect();
 
@@ -120,49 +357,28 @@ fn read_catalog_file(filename: &str) -> Option<String> {
     None
 }
 
-/// Returns `(timezone_tier, country_rank)` for curated high-quality countries in the
-/// same timezone (`UTC+7`) and adjacent high-bandwidth APAC submarine cable hubs (`UTC+8` / `UTC+9`).
-/// Returns `None` for non-priority countries so only high-quality regional nodes are shown.
-pub fn priority_country_rank(country_code: &str) -> Option<(u8, u8)> {
-    match country_code.trim().to_ascii_uppercase().as_str() {
-        // Tier 1: Same Timezone (UTC+7 — Direct SEA Peering)
-        "VN" => Some((1, 1)),
-        "TH" => Some((1, 2)),
-        "ID" => Some((1, 3)),
-        "KH" => Some((1, 4)),
-        // Tier 2: Adjacent Timezone (UTC+8 — Tier-1 APAC Submarine Cable Hubs)
-        "SG" => Some((2, 1)),
-        "HK" => Some((2, 2)),
-        "TW" => Some((2, 3)),
-        "MY" => Some((2, 4)),
-        "PH" => Some((2, 5)),
-        // Tier 3: East Asia High-Capacity Backbone (UTC+9)
-        "JP" => Some((3, 1)),
-        "KR" => Some((3, 2)),
-        _ => None,
-    }
-}
-
 pub fn location_sort_key(loc: &SurfsharkLocation) -> (u8, u8, u8, u32, String, String) {
-    if loc.region.eq_ignore_ascii_case("Custom") {
-        return (
-            0,
-            0,
-            0,
-            loc.load,
-            loc.location.clone(),
-            loc.connection_name.clone(),
-        );
-    }
-    let (tier, country_rank) = priority_country_rank(&loc.country_code).unwrap_or((9, 99));
+    let meta = classify_location_timezone(
+        &loc.country_code,
+        &loc.location,
+        &loc.connection_name,
+        &loc.region,
+    );
+    let sort_order = meta.map(|m| m.sort_order).unwrap_or(99);
     let type_rank = match loc.location_type {
         LocationType::Generic => 0,
         LocationType::Static => 1,
     };
+    // Within UTC+7 (Asia/Ho_Chi_Minh), prefer VN first when load is healthy
+    let home_bonus = if sort_order == 1 && loc.country_code.eq_ignore_ascii_case("VN") && loc.load <= 35 {
+        0
+    } else {
+        1
+    };
     (
-        tier,
+        sort_order,
         type_rank,
-        country_rank,
+        home_bonus,
         loc.load,
         loc.location.clone(),
         loc.connection_name.clone(),
@@ -172,15 +388,23 @@ pub fn location_sort_key(loc: &SurfsharkLocation) -> (u8, u8, u8, u32, String, S
 pub fn curate_and_sort_locations(catalog: Vec<SurfsharkLocation>) -> Vec<SurfsharkLocation> {
     let mut filtered: Vec<SurfsharkLocation> = catalog
         .into_iter()
-        .filter(|loc| {
-            loc.region.eq_ignore_ascii_case("Custom")
-                || priority_country_rank(&loc.country_code).is_some()
+        .filter_map(|mut loc| {
+            if loc
+                .connection_name
+                .trim()
+                .to_ascii_lowercase()
+                .starts_with("st-age-")
+            {
+                return None;
+            }
+            populate_location_timezone(&mut loc)?;
+            Some(loc)
         })
         .collect();
 
     filtered.sort_by_key(location_sort_key);
 
-    let mut counts: std::collections::HashMap<(String, u8), usize> =
+    let mut counts: std::collections::HashMap<(String, String, u8), usize> =
         std::collections::HashMap::new();
     let mut curated = Vec::with_capacity(filtered.len());
 
@@ -193,13 +417,20 @@ pub fn curate_and_sort_locations(catalog: Vec<SurfsharkLocation>) -> Vec<Surfsha
             LocationType::Generic => 0,
             LocationType::Static => 1,
         };
-        let key = (loc.country_code.to_ascii_uppercase(), type_tag);
+        let key = (
+            loc.country_code.to_ascii_uppercase(),
+            loc.location.to_ascii_lowercase(),
+            type_tag,
+        );
         let current_count = counts.entry(key).or_insert(0);
-        let max_per_country = match loc.location_type {
+        let max_per_city = match loc.location_type {
             LocationType::Generic => 2,
-            LocationType::Static => 3,
+            LocationType::Static => 2,
         };
-        if *current_count >= max_per_country {
+        if *current_count >= max_per_city {
+            continue;
+        }
+        if loc.location_type == LocationType::Static && loc.load > 60 {
             continue;
         }
         if *current_count > 0 && loc.load > 65 {
@@ -664,17 +895,54 @@ mod tests {
                 let ord = location_sort_key(a).cmp(&location_sort_key(b));
                 assert!(
                     ord != std::cmp::Ordering::Greater,
-                    "Catalog must be sorted by timezone tier & quality"
+                    "Catalog must be sorted by timezone group & quality"
                 );
             }
             for loc in &catalog {
                 assert!(
-                    priority_country_rank(&loc.country_code).is_some(),
-                    "Only curated same/adjacent timezone countries should be included, found {}",
-                    loc.country_code
+                    !loc.tz_group.is_empty(),
+                    "Every curated location must have a classified timezone group, found empty on {}",
+                    loc.connection_name
                 );
             }
         }
+    }
+
+    #[test]
+    fn classifies_us_and_au_states_by_exact_timezone() {
+        let nyc = classify_location_timezone("US", "New York", "us-nyc.prod.surfshark.com", "Americas")
+            .expect("NYC classified");
+        let mia = classify_location_timezone("US", "Miami", "us-mia.prod.surfshark.com", "Americas")
+            .expect("Miami classified");
+        let dal = classify_location_timezone("US", "Dallas", "us-dal.prod.surfshark.com", "Americas")
+            .expect("Dallas classified");
+        let den = classify_location_timezone("US", "Denver", "us-den.prod.surfshark.com", "Americas")
+            .expect("Denver classified");
+        let lax = classify_location_timezone("US", "Los Angeles", "us-lax.prod.surfshark.com", "Americas")
+            .expect("LA classified");
+
+        assert_eq!(nyc.tz_group, "us_east");
+        assert_eq!(mia.tz_group, "us_east");
+        assert_eq!(nyc.iana_timezone, "America/New_York");
+        assert_eq!(dal.tz_group, "us_central");
+        assert_eq!(dal.iana_timezone, "America/Chicago");
+        assert_eq!(den.tz_group, "us_mountain");
+        assert_eq!(den.iana_timezone, "America/Denver");
+        assert_eq!(lax.tz_group, "us_west");
+        assert_eq!(lax.iana_timezone, "America/Los_Angeles");
+        assert_ne!(nyc.tz_group, lax.tz_group);
+        assert_ne!(nyc.tz_group, dal.tz_group);
+
+        let perth = classify_location_timezone("AU", "Perth", "au-per.prod.surfshark.com", "Asia Pacific")
+            .expect("Perth classified");
+        let sydney = classify_location_timezone("AU", "Sydney", "au-syd.prod.surfshark.com", "Asia Pacific")
+            .expect("Sydney classified");
+        assert_eq!(perth.tz_group, "asia_utc8");
+        assert_eq!(sydney.tz_group, "au_east");
+        assert!(
+            classify_location_timezone("AU", "Adelaide", "au-adl.prod.surfshark.com", "Asia Pacific")
+                .is_none()
+        );
     }
 
     #[test]

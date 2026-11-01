@@ -362,7 +362,7 @@ pub fn parse_nordvpn_servers_json(raw: &str) -> Result<Vec<SurfsharkLocation>, S
             })
             .unwrap_or_else(|| ("NordVPN".to_string(), "UN".to_string(), entry.name.clone()));
 
-        locations.push(SurfsharkLocation {
+        let mut loc = SurfsharkLocation {
             id: format!("nordvpn-{}", entry.id),
             provider: VpnProvider::Nordvpn,
             country,
@@ -373,7 +373,12 @@ pub fn parse_nordvpn_servers_json(raw: &str) -> Result<Vec<SurfsharkLocation>, S
             connection_name: conn_host,
             pub_key,
             location_type: LocationType::Generic,
-        });
+            tz_group: String::new(),
+            utc_offset: String::new(),
+            iana_timezone: String::new(),
+        };
+        let _ = crate::surfshark::populate_location_timezone(&mut loc);
+        locations.push(loc);
     }
 
     locations.sort_by(|a, b| {
@@ -477,7 +482,7 @@ pub fn parse_mullvad_relays_json(raw: &str) -> Result<Vec<SurfsharkLocation>, St
                         if conn.is_empty() {
                             continue;
                         }
-                        locations.push(SurfsharkLocation {
+                        let mut loc = SurfsharkLocation {
                             id: format!("mullvad-{}", relay.hostname),
                             provider: VpnProvider::Mullvad,
                             country: country.name.clone(),
@@ -488,7 +493,12 @@ pub fn parse_mullvad_relays_json(raw: &str) -> Result<Vec<SurfsharkLocation>, St
                             connection_name: conn,
                             pub_key: relay.public_key.trim().to_string(),
                             location_type: LocationType::Generic,
-                        });
+                            tz_group: String::new(),
+                            utc_offset: String::new(),
+                            iana_timezone: String::new(),
+                        };
+                        let _ = crate::surfshark::populate_location_timezone(&mut loc);
+                        locations.push(loc);
                     }
                 }
             }
@@ -532,7 +542,7 @@ pub fn parse_mullvad_relays_json(raw: &str) -> Result<Vec<SurfsharkLocation>, St
         if conn.is_empty() {
             continue;
         }
-        locations.push(SurfsharkLocation {
+        let mut loc = SurfsharkLocation {
             id: format!("mullvad-{}", relay.hostname),
             provider: VpnProvider::Mullvad,
             country: relay.country_name,
@@ -543,7 +553,12 @@ pub fn parse_mullvad_relays_json(raw: &str) -> Result<Vec<SurfsharkLocation>, St
             connection_name: conn,
             pub_key: relay.pubkey.trim().to_string(),
             location_type: LocationType::Generic,
-        });
+            tz_group: String::new(),
+            utc_offset: String::new(),
+            iana_timezone: String::new(),
+        };
+        let _ = crate::surfshark::populate_location_timezone(&mut loc);
+        locations.push(loc);
     }
 
     locations.sort_by(|a, b| {
@@ -582,7 +597,7 @@ pub fn parse_and_build_custom_location(
                 .chars()
                 .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
                 .collect();
-            Some(SurfsharkLocation {
+            let mut loc = SurfsharkLocation {
                 id: format!("{}-{}", provider.id_str(), slug),
                 provider,
                 country: provider.display_name().to_string(),
@@ -600,7 +615,12 @@ pub fn parse_and_build_custom_location(
                 connection_name: endpoint,
                 pub_key,
                 location_type: LocationType::Generic,
-            })
+                tz_group: "custom".to_string(),
+                utc_offset: "Custom".to_string(),
+                iana_timezone: "Custom/WireGuard".to_string(),
+            };
+            let _ = crate::surfshark::populate_location_timezone(&mut loc);
+            Some(loc)
         }
         _ => None,
     };
