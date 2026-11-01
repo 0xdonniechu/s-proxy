@@ -191,7 +191,12 @@ pub fn validate_provider_network_fields(address: &str, dns: &str) -> Result<(Str
 }
 
 fn run_curl_get(url: &str, basic_auth: Option<&str>) -> Result<String, String> {
-    let mut cmd = Command::new(r"C:\Windows\System32\curl.exe");
+    #[cfg(target_os = "windows")]
+    let curl_bin = r"C:\Windows\System32\curl.exe";
+    #[cfg(not(target_os = "windows"))]
+    let curl_bin = "/usr/bin/curl";
+
+    let mut cmd = Command::new(curl_bin);
     cmd.args([
         "-sS",
         "-fL",
@@ -211,7 +216,7 @@ fn run_curl_get(url: &str, basic_auth: Option<&str>) -> Result<String, String> {
 
     let mut child = cmd
         .spawn()
-        .map_err(|e| format!("Failed to spawn curl.exe: {e}"))?;
+        .map_err(|e| format!("Failed to spawn curl: {e}"))?;
     if let Some(auth) = basic_auth {
         let safe_auth: String = auth
             .chars()
@@ -221,12 +226,12 @@ fn run_curl_get(url: &str, basic_auth: Option<&str>) -> Result<String, String> {
         if let Some(mut stdin) = child.stdin.take() {
             stdin
                 .write_all(config_line.as_bytes())
-                .map_err(|e| format!("Failed to pass auth config to curl.exe: {e}"))?;
+                .map_err(|e| format!("Failed to pass auth config to curl: {e}"))?;
         }
     }
     let out = child
         .wait_with_output()
-        .map_err(|e| format!("Failed to execute curl.exe: {e}"))?;
+        .map_err(|e| format!("Failed to execute curl: {e}"))?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
         return Err(if stderr.is_empty() {

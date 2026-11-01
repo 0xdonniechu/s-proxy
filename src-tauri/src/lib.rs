@@ -6,8 +6,9 @@ pub mod surfshark;
 pub mod wireguard;
 
 use gologin::{
-    check_slot_egress_blocking, detect_host_isp_ip_blocking, fetch_gologin_profiles_blocking,
-    update_gologin_profile_proxy_blocking, EgressCheckResult, GoLoginProfileSummary, LeakStatus,
+    check_slot_egress_blocking, detect_host_isp_ip_with_interface_blocking,
+    fetch_gologin_profiles_blocking, update_gologin_profile_proxy_blocking, EgressCheckResult,
+    GoLoginProfileSummary, LeakStatus,
 };
 use providers::{
     fetch_mullvad_catalog_blocking, fetch_nordvpn_catalog_blocking,
@@ -647,7 +648,12 @@ async fn refresh_system_state(state: State<'_, SharedHub>) -> Result<HubSnapshot
     let (adapters, locations, host_ip) = tokio::task::spawn_blocking(|| {
         let adapters = detect_windows_adapters();
         let locations = load_local_catalog();
-        let host_ip = detect_host_isp_ip_blocking();
+        let isp_ipv4 = adapters
+            .iter()
+            .find(|a| a.is_default_route && a.kind == AdapterKind::PrimaryIsp)
+            .or_else(|| adapters.iter().find(|a| a.kind == AdapterKind::PrimaryIsp && a.status_up))
+            .map(|a| a.ipv4.clone());
+        let host_ip = detect_host_isp_ip_with_interface_blocking(isp_ipv4.as_deref());
         (adapters, locations, host_ip)
     })
     .await
@@ -1082,7 +1088,7 @@ async fn check_slot_ip(
     state: State<'_, SharedHub>,
 ) -> Result<HubSnapshot, String> {
     let hub = Arc::clone(&state);
-    let (port, host_isp_ip) = {
+    let (port, host_isp_ip, isp_ipv4) = {
         let guard = hub.lock().map_err(|_| "State lock poisoned".to_string())?;
         let slot = guard
             .persisted
@@ -1097,11 +1103,23 @@ async fn check_slot_ip(
         if !is_running {
             return Err("Start the proxy slot before checking its exit IP".to_string());
         }
-        (slot.port, guard.host_isp_ip.clone())
+        let isp_ipv4 = guard
+            .adapters
+            .iter()
+            .find(|a| a.is_default_route && a.kind == AdapterKind::PrimaryIsp)
+            .or_else(|| {
+                guard
+                    .adapters
+                    .iter()
+                    .find(|a| a.kind == AdapterKind::PrimaryIsp && a.status_up)
+            })
+            .map(|a| a.ipv4.clone());
+        (slot.port, guard.host_isp_ip.clone(), isp_ipv4)
     };
 
     let check_res = tokio::task::spawn_blocking(move || {
-        let isp = host_isp_ip.or_else(detect_host_isp_ip_blocking);
+        let isp = host_isp_ip
+            .or_else(|| detect_host_isp_ip_with_interface_blocking(isp_ipv4.as_deref()));
         let egress = check_slot_egress_blocking(port, isp.as_deref());
         (isp, egress)
     })
@@ -1333,8 +1351,9 @@ fn setup_tray(app: &AppHandle, hub: SharedHub) -> tauri::Result<()> {
 pub fn run() {
     let shared_hub: SharedHub = Arc::new(Mutex::new(HubCore::new()));
     let hub_for_setup = Arc::clone(&shared_hub);
+    let hub_for_exit = Arc::clone(&shared_hub);
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(shared_hub)
         .setup(move |app| {
@@ -1384,6 +1403,20 @@ pub fn run() {
             assign_slot_to_gologin,
             install_wireproxy
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running s-proxy tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building s-proxy tauri application");
+
+    app.run(move |app_handle, event| match event {
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Reopen { .. } => {
+            show_main_window(app_handle);
+        }
+        tauri::RunEvent::Exit => {
+            let _ = app_handle;
+            if let Ok(mut guard) = hub_for_exit.lock() {
+                guard.stop_all();
+            }
+        }
+        _ => {}
+    });
 }

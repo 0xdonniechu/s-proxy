@@ -899,7 +899,7 @@ function renderStatusTab(snap: HubSnapshot): string {
       enabled: s.killSwitchEnabled,
       title: sp.killSwitchTitle,
       desc: sp.killSwitchDesc,
-      badge: "IP_UNICAST_IF",
+      badge: "IP_UNICAST_IF / IP_BOUND_IF",
     },
     {
       id: "dnsLeakProtection",
@@ -1013,7 +1013,7 @@ function renderStatusTab(snap: HubSnapshot): string {
             ${isSurfConnected ? escapeHtml(surf?.ipv4 || "") : escapeHtml(strings.header.disconnected)}
           </div>
           <div class="subtext-sm">
-            ${escapeHtml(surf?.description || "Surfshark Wintun / OpenVPN")}
+            ${escapeHtml(surf?.description || "Surfshark Wintun / utun / OpenVPN")}
           </div>
         </div>
 
@@ -1628,7 +1628,7 @@ function renderSettingsTab(snap: HubSnapshot): string {
             <span class="badge ${s.wireproxyReady ? "badge-safe" : "badge-kill"}">
               ${escapeHtml(s.wireproxyReady ? strings.settings.wireproxyReady : strings.settings.wireproxyMissing)}
             </span>
-            <span class="mono subtext">${escapeHtml(s.wireproxyPath || "Auto-resolved in system PATH or Local AppData")}</span>
+            <span class="mono subtext">${escapeHtml(s.wireproxyPath || "Auto-resolved in system PATH or AppData")}</span>
             <button type="button" class="btn btn-secondary btn-sm" id="btn-install-wireproxy">
               ${escapeHtml(strings.settings.installWireproxy)}
             </button>

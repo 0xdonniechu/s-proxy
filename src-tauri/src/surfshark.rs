@@ -30,6 +30,8 @@ pub struct SurfsharkLocation {
 struct RawLocationEntry {
     #[serde(default)]
     id: String,
+    #[serde(default, rename = "type")]
+    entry_type: String,
     #[serde(default)]
     country: String,
     #[serde(default)]
@@ -56,17 +58,26 @@ pub fn parse_locations_json(
     let locations = entries
         .into_iter()
         .filter(|e| !e.connection_name.trim().is_empty() && !e.pub_key.trim().is_empty())
-        .map(|e| SurfsharkLocation {
-            id: e.id,
-            provider: crate::providers::VpnProvider::Surfshark,
-            country: e.country,
-            country_code: e.country_code,
-            location: e.location,
-            region: e.region,
-            load: e.load,
-            connection_name: e.connection_name,
-            pub_key: e.pub_key,
-            location_type,
+        .map(|e| {
+            let loc_type = if e.entry_type.eq_ignore_ascii_case("static") {
+                LocationType::Static
+            } else if e.entry_type.eq_ignore_ascii_case("generic") {
+                LocationType::Generic
+            } else {
+                location_type
+            };
+            SurfsharkLocation {
+                id: e.id,
+                provider: crate::providers::VpnProvider::Surfshark,
+                country: e.country,
+                country_code: e.country_code,
+                location: e.location,
+                region: e.region,
+                load: e.load,
+                connection_name: e.connection_name,
+                pub_key: e.pub_key,
+                location_type: loc_type,
+            }
         })
         .collect();
 
@@ -84,6 +95,17 @@ fn read_catalog_file(filename: &str) -> Option<String> {
     if let Ok(app_data) = std::env::var("APPDATA") {
         let fallback = PathBuf::from(app_data).join("Surfshark").join(filename);
         if let Ok(content) = std::fs::read_to_string(&fallback) {
+            return Some(content);
+        }
+    }
+
+    if let Ok(home) = std::env::var("HOME") {
+        let mac_fallback = PathBuf::from(home)
+            .join("Library")
+            .join("Application Support")
+            .join("Surfshark")
+            .join(filename);
+        if let Ok(content) = std::fs::read_to_string(&mac_fallback) {
             return Some(content);
         }
     }
@@ -110,6 +132,31 @@ pub fn load_local_catalog() -> Vec<SurfsharkLocation> {
     if let Some(raw_static) = read_catalog_file("static_locations.dat") {
         if let Ok(mut locs) = parse_locations_json(&raw_static, LocationType::Static) {
             catalog.append(&mut locs);
+        }
+    }
+
+    if catalog.is_empty() {
+        let mac_clusters_paths = [
+            PathBuf::from("/Applications/Surfshark.app/Contents/Resources/clusters.json"),
+            std::env::var("HOME")
+                .map(|h| {
+                    PathBuf::from(h)
+                        .join("Applications/Surfshark.app/Contents/Resources/clusters.json")
+                })
+                .unwrap_or_default(),
+        ];
+        for path in &mac_clusters_paths {
+            if path.as_os_str().is_empty() {
+                continue;
+            }
+            if let Ok(raw_clusters) = std::fs::read_to_string(path) {
+                if let Ok(mut locs) = parse_locations_json(&raw_clusters, LocationType::Generic) {
+                    if !locs.is_empty() {
+                        catalog.append(&mut locs);
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -193,11 +240,12 @@ pub fn classify_adapter(
         || (desc_l.contains("wintun userspace tunnel")
             && name_l != "wt0"
             && !is_cgnat_ipv4(ipv4))
-        || ((desc_l.contains("wintun") || desc_l.contains("openvpn"))
+        || ((name_l.starts_with("utun") || desc_l.contains("wintun") || desc_l.contains("openvpn"))
             && (ipv4.starts_with("10.8.") || ipv4.starts_with("10.14.")))
     {
         AdapterKind::Surfshark
     } else if name_l == "wt0"
+        || name_l.starts_with("utun")
         || is_cgnat_ipv4(ipv4)
         || desc_l.contains("wireguard")
         || desc_l.contains("wintun")
@@ -248,6 +296,198 @@ pub fn parse_adapters_json(json_str: &str) -> Vec<DetectedAdapter> {
     detected
 }
 
+pub fn parse_macos_default_route_interfaces(netstat_or_route_out: &str) -> Vec<String> {
+    let mut ifaces = Vec::new();
+    for raw_line in netstat_or_route_out.lines() {
+        let trimmed = raw_line.trim();
+        if trimmed.starts_with("default ") || trimmed.starts_with("default\t") {
+            let tokens: Vec<&str> = trimmed.split_whitespace().collect();
+            if let Some(last) = tokens.last() {
+                let iface = last.trim().to_string();
+                if !iface.is_empty() && !ifaces.contains(&iface) {
+                    ifaces.push(iface);
+                }
+            }
+        } else if let Some(rest) = trimmed.strip_prefix("interface:") {
+            if let Some(first) = rest.split_whitespace().next() {
+                let iface = first.trim().to_string();
+                if !iface.is_empty() && !ifaces.contains(&iface) {
+                    ifaces.push(iface);
+                }
+            }
+        }
+    }
+    ifaces
+}
+
+#[derive(Default)]
+struct MacosIfaceState {
+    name: String,
+    if_index: u32,
+    has_up: bool,
+    has_running: bool,
+    is_loopback: bool,
+    ipv4: String,
+    explicit_status: Option<bool>,
+    hw_type: String,
+    ne_desc: String,
+}
+
+pub fn parse_macos_ifconfig_v(raw: &str, default_ifaces: &[String]) -> Vec<DetectedAdapter> {
+    let mut adapters = Vec::new();
+    let mut current: Option<MacosIfaceState> = None;
+
+    let finalize = |state: MacosIfaceState, out: &mut Vec<DetectedAdapter>| {
+        let ipv4 = state.ipv4.trim();
+        if state.is_loopback || ipv4.is_empty() || ipv4.starts_with("127.") {
+            return;
+        }
+        let status_up = state.has_up && state.has_running && state.explicit_status.unwrap_or(true);
+        let description = if !state.ne_desc.is_empty() {
+            state.ne_desc
+        } else if state.name.starts_with("utun") {
+            if ipv4.starts_with("10.14.") {
+                "Surfshark WireGuard Tunnel (utun)".to_string()
+            } else if is_cgnat_ipv4(ipv4) {
+                "Userspace Mesh / CGNAT Tunnel (utun)".to_string()
+            } else {
+                "macOS Tunnel Interface (utun)".to_string()
+            }
+        } else if !state.hw_type.is_empty() {
+            format!("macOS {} ({})", state.hw_type, state.name)
+        } else {
+            format!("macOS Network Interface ({})", state.name)
+        };
+        let is_default_route = default_ifaces.iter().any(|d| d == &state.name);
+        let kind = classify_adapter(&state.name, &description, ipv4, is_default_route);
+        out.push(DetectedAdapter {
+            name: state.name,
+            description,
+            if_index: state.if_index,
+            ipv4: ipv4.to_string(),
+            status_up,
+            is_default_route,
+            kind,
+        });
+    };
+
+    for line in raw.lines() {
+        if !line.starts_with(' ') && !line.starts_with('\t') && line.contains(": flags=") {
+            if let Some(prev) = current.take() {
+                finalize(prev, &mut adapters);
+            }
+            let name = line.split(':').next().unwrap_or("").trim().to_string();
+            let flags_str = if let (Some(start), Some(end)) = (line.find('<'), line.find('>')) {
+                if end > start {
+                    &line[start + 1..end]
+                } else {
+                    ""
+                }
+            } else {
+                ""
+            };
+            let has_up = flags_str.split(',').any(|f| f.trim() == "UP");
+            let has_running = flags_str.split(',').any(|f| f.trim() == "RUNNING");
+            let is_loopback = flags_str.split(',').any(|f| f.trim() == "LOOPBACK");
+            let if_index = if let Some(idx_pos) = line.find("index ") {
+                line[idx_pos + "index ".len()..]
+                    .split_whitespace()
+                    .next()
+                    .and_then(|s| s.parse::<u32>().ok())
+                    .unwrap_or(0)
+            } else {
+                0
+            };
+
+            current = Some(MacosIfaceState {
+                name,
+                if_index,
+                has_up,
+                has_running,
+                is_loopback,
+                ipv4: String::new(),
+                explicit_status: None,
+                hw_type: String::new(),
+                ne_desc: String::new(),
+            });
+            continue;
+        }
+
+        if let Some(ref mut cur) = current {
+            let trimmed = line.trim();
+            if let Some(rest) = trimmed.strip_prefix("inet ") {
+                if cur.ipv4.is_empty() {
+                    let mut parts = rest.split_whitespace();
+                    if let Some(first) = parts.next() {
+                        let ip = first.trim();
+                        if !ip.is_empty() && !ip.starts_with("127.") {
+                            cur.ipv4 = ip.to_string();
+                        }
+                    }
+                }
+            } else if let Some(rest) = trimmed.strip_prefix("status:") {
+                let val = rest.trim();
+                cur.explicit_status = Some(val == "active");
+            } else if let Some(rest) = trimmed.strip_prefix("type:") {
+                let val = rest.trim();
+                if !val.is_empty() {
+                    cur.hw_type = val.to_string();
+                }
+            } else if trimmed.contains("agent domain:NetworkExtension") {
+                if let Some(desc_idx) = trimmed.find("desc:\"") {
+                    let after_desc = &trimmed[desc_idx + "desc:\"".len()..];
+                    if let Some(end_quote) = after_desc.find('"') {
+                        let desc = after_desc[..end_quote].trim();
+                        if !desc.is_empty() {
+                            cur.ne_desc = desc.to_string();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(last) = current.take() {
+        finalize(last, &mut adapters);
+    }
+
+    adapters
+}
+
+pub fn detect_macos_adapters() -> Vec<DetectedAdapter> {
+    let mut default_ifaces = Vec::new();
+    if let Ok(out) = std::process::Command::new("/usr/sbin/netstat")
+        .args(["-rn", "-f", "inet"])
+        .output()
+    {
+        if out.status.success() {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            default_ifaces = parse_macos_default_route_interfaces(&stdout);
+        }
+    }
+    if default_ifaces.is_empty() {
+        if let Ok(out) = std::process::Command::new("/sbin/route")
+            .args(["-n", "get", "default"])
+            .output()
+        {
+            if out.status.success() {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                default_ifaces = parse_macos_default_route_interfaces(&stdout);
+            }
+        }
+    }
+
+    let ifconfig_out = match std::process::Command::new("/sbin/ifconfig")
+        .arg("-v")
+        .output()
+    {
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout).to_string(),
+        _ => return Vec::new(),
+    };
+
+    parse_macos_ifconfig_v(&ifconfig_out, &default_ifaces)
+}
+
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -274,7 +514,12 @@ pub fn detect_windows_adapters() -> Vec<DetectedAdapter> {
     parse_adapters_json(&stdout)
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "macos")]
+pub fn detect_windows_adapters() -> Vec<DetectedAdapter> {
+    detect_macos_adapters()
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 pub fn detect_windows_adapters() -> Vec<DetectedAdapter> {
     Vec::new()
 }
@@ -447,5 +692,138 @@ mod tests {
         assert_eq!(adapters.len(), 1);
         assert_eq!(adapters[0].name, "Wi-Fi");
         assert_eq!(adapters[0].kind, AdapterKind::PrimaryIsp);
+    }
+
+    #[test]
+    fn parses_locations_json_with_entry_types() {
+        let sample = r#"[
+            {
+                "id": "static-1",
+                "country": "Germany",
+                "countryCode": "DE",
+                "location": "Frankfurt",
+                "region": "Europe",
+                "load": 10,
+                "connectionName": "de-fra-st001.prod.surfshark.com",
+                "pubKey": "pubkey1=",
+                "type": "static"
+            },
+            {
+                "id": "generic-1",
+                "country": "Japan",
+                "countryCode": "JP",
+                "location": "Tokyo",
+                "region": "Asia",
+                "load": 20,
+                "connectionName": "jp-tok.prod.surfshark.com",
+                "pubKey": "pubkey2=",
+                "type": "generic"
+            },
+            {
+                "id": "fallback-1",
+                "country": "France",
+                "countryCode": "FR",
+                "location": "Paris",
+                "region": "Europe",
+                "load": 15,
+                "connectionName": "fr-par.prod.surfshark.com",
+                "pubKey": "pubkey3="
+            }
+        ]"#;
+
+        let locs = parse_locations_json(sample, LocationType::Generic).expect("should parse");
+        assert_eq!(locs.len(), 3);
+        assert_eq!(locs[0].location_type, LocationType::Static);
+        assert_eq!(locs[1].location_type, LocationType::Generic);
+        assert_eq!(locs[2].location_type, LocationType::Generic);
+    }
+
+    #[test]
+    fn test_parse_macos_default_route_interfaces() {
+        let netstat_sample = "Destination        Gateway            Flags               Netif Expire\n\
+                              default            192.168.31.1       UGScg                 en1\n\
+                              127.0.0.1          127.0.0.1          UH                    lo0";
+        let ifaces = parse_macos_default_route_interfaces(netstat_sample);
+        assert_eq!(ifaces, vec!["en1"]);
+
+        let route_sample = "   route to: default\n\
+                            destination: default\n\
+                                   mask: default\n\
+                                gateway: 192.168.1.1\n\
+                              interface: en0\n\
+                                  flags: <UP,GATEWAY,DONE,STATIC,PRCLONING>";
+        let ifaces_route = parse_macos_default_route_interfaces(route_sample);
+        assert_eq!(ifaces_route, vec!["en0"]);
+    }
+
+    #[test]
+    fn test_parse_macos_ifconfig_v() {
+        let sample = r#"
+lo0: flags=8049<UP,LOOPBACK,RUNNING,MULTICAST> mtu 16384 index 1
+	inet 127.0.0.1 netmask 0xff000000
+	status: active
+en1: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 1500 index 12
+	inet 192.168.31.86 netmask 0xffffff00 broadcast 192.168.31.255
+	status: active
+	type: Wi-Fi
+utun4: flags=8051<UP,POINTOPOINT,RUNNING,MULTICAST> mtu 1500 index 21
+	inet 10.14.0.2 --> 10.14.0.2 netmask 0xffffffff
+	agent domain:NetworkExtension type:VPN flags:0x4 desc:"VPN: Surfshark. WireGuard®"
+utun100: flags=8051<UP,POINTOPOINT,RUNNING,MULTICAST> mtu 1280 index 22
+	inet 100.87.215.217 --> 100.87.215.217 netmask 0xff000000
+"#;
+        let default_ifaces = vec!["en1".to_string()];
+        let adapters = parse_macos_ifconfig_v(sample, &default_ifaces);
+        assert_eq!(adapters.len(), 3);
+
+        let en1 = adapters.iter().find(|a| a.name == "en1").expect("en1 found");
+        assert_eq!(en1.if_index, 12);
+        assert_eq!(en1.ipv4, "192.168.31.86");
+        assert!(en1.status_up);
+        assert!(en1.is_default_route);
+        assert_eq!(en1.description, "macOS Wi-Fi (en1)");
+        assert_eq!(en1.kind, AdapterKind::PrimaryIsp);
+
+        let utun4 = adapters.iter().find(|a| a.name == "utun4").expect("utun4 found");
+        assert_eq!(utun4.if_index, 21);
+        assert_eq!(utun4.ipv4, "10.14.0.2");
+        assert!(utun4.status_up);
+        assert!(!utun4.is_default_route);
+        assert_eq!(utun4.description, "VPN: Surfshark. WireGuard®");
+        assert_eq!(utun4.kind, AdapterKind::Surfshark);
+
+        let utun100 = adapters.iter().find(|a| a.name == "utun100").expect("utun100 found");
+        assert_eq!(utun100.if_index, 22);
+        assert_eq!(utun100.ipv4, "100.87.215.217");
+        assert!(utun100.status_up);
+        assert!(!utun100.is_default_route);
+        assert_eq!(utun100.description, "Userspace Mesh / CGNAT Tunnel (utun)");
+        assert_eq!(utun100.kind, AdapterKind::OtherVpn);
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn detects_live_macos_adapters_non_empty() {
+        let adapters = detect_windows_adapters();
+        assert!(
+            !adapters.is_empty(),
+            "detect_windows_adapters() returned empty list on macOS host"
+        );
+        if std::path::Path::new("/Applications/Surfshark.app/Contents/Resources/clusters.json")
+            .exists()
+        {
+            let catalog = load_local_catalog();
+            assert_eq!(catalog.len(), 180);
+            let generic_count = catalog
+                .iter()
+                .filter(|l| l.location_type == LocationType::Generic)
+                .count();
+            let static_count = catalog
+                .iter()
+                .filter(|l| l.location_type == LocationType::Static)
+                .count();
+            assert_eq!(generic_count, 142);
+            assert_eq!(static_count, 38);
+        }
     }
 }

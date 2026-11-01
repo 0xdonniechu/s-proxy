@@ -86,7 +86,7 @@ pub fn validate_adapter_not_leaking(
 
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
-fn set_windows_unicast_if(socket: &Socket, if_index: u32) -> io::Result<()> {
+fn set_socket_outbound_interface(socket: &Socket, if_index: u32) -> io::Result<()> {
     use std::os::windows::io::AsRawSocket;
     const IPPROTO_IP: i32 = 0;
     const IP_UNICAST_IF: i32 = 31;
@@ -116,8 +116,16 @@ fn set_windows_unicast_if(socket: &Socket, if_index: u32) -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(not(target_os = "windows"))]
-fn set_windows_unicast_if(_socket: &Socket, _if_index: u32) -> io::Result<()> {
+#[cfg(target_os = "macos")]
+fn set_socket_outbound_interface(socket: &Socket, if_index: u32) -> io::Result<()> {
+    if let Some(nz_idx) = std::num::NonZeroU32::new(if_index) {
+        socket.bind_device_by_index_v4(Some(nz_idx))?;
+    }
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+fn set_socket_outbound_interface(_socket: &Socket, _if_index: u32) -> io::Result<()> {
     Ok(())
 }
 
@@ -127,7 +135,7 @@ fn create_bound_tcp_socket(adapter_ip: Ipv4Addr, if_index: u32) -> io::Result<So
     socket.set_tcp_nodelay(true)?;
     let bind_addr = SocketAddrV4::new(adapter_ip, 0);
     socket.bind(&SockAddr::from(bind_addr))?;
-    set_windows_unicast_if(&socket, if_index)?;
+    set_socket_outbound_interface(&socket, if_index)?;
     Ok(socket)
 }
 
@@ -136,7 +144,7 @@ fn create_bound_udp_socket(adapter_ip: Ipv4Addr, if_index: u32) -> io::Result<So
     socket.set_nonblocking(true)?;
     let bind_addr = SocketAddrV4::new(adapter_ip, 0);
     socket.bind(&SockAddr::from(bind_addr))?;
-    set_windows_unicast_if(&socket, if_index)?;
+    set_socket_outbound_interface(&socket, if_index)?;
     Ok(socket)
 }
 
@@ -380,6 +388,7 @@ async fn dial_upstream(target: &TargetAddr, upstream: &UpstreamConfig) -> io::Re
                 Err(e)
                     if e.raw_os_error() == Some(10035)
                         || e.raw_os_error() == Some(115)
+                        || e.raw_os_error() == Some(36)
                         || e.kind() == io::ErrorKind::WouldBlock =>
                 {
                     sock.into()
@@ -845,5 +854,105 @@ mod tests {
             parse_host_port("1.1.1.1:80", 80).unwrap(),
             TargetAddr::Ip("1.1.1.1:80".parse().unwrap())
         );
+    }
+
+    #[test]
+    fn binds_tcp_and_udp_sockets_with_interface_index() {
+        // lo0 is interface index 1 on macOS and loopback on Windows
+        let tcp_sock = create_bound_tcp_socket(Ipv4Addr::LOCALHOST, 1)
+            .expect("should bind TCP socket to loopback with if_index 1");
+        let udp_sock = create_bound_udp_socket(Ipv4Addr::LOCALHOST, 1)
+            .expect("should bind UDP socket to loopback with if_index 1");
+        #[cfg(target_os = "macos")]
+        {
+            assert_eq!(
+                tcp_sock.device_index_v4().expect("should read bound index"),
+                std::num::NonZeroU32::new(1)
+            );
+            assert_eq!(
+                udp_sock.device_index_v4().expect("should read bound index"),
+                std::num::NonZeroU32::new(1)
+            );
+        }
+        let _ = (tcp_sock, udp_sock);
+    }
+
+    #[tokio::test]
+    async fn socks5_and_http_connect_tunnel_roundtrip_on_bound_socket() {
+        let echo_listener = match TcpListener::bind("127.0.0.1:0").await {
+            Ok(l) => l,
+            Err(e) if e.kind() == io::ErrorKind::PermissionDenied => return,
+            Err(e) => panic!("unexpected bind error: {e}"),
+        };
+        let echo_addr = echo_listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            while let Ok((mut s, _)) = echo_listener.accept().await {
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 64];
+                    if let Ok(n) = s.read(&mut buf).await {
+                        let _ = s.write_all(&buf[..n]).await;
+                    }
+                });
+            }
+        });
+
+        let upstream = UpstreamConfig::AdapterBridge {
+            adapter_ip: Ipv4Addr::LOCALHOST,
+            if_index: 1,
+            dns_server: Ipv4Addr::new(1, 1, 1, 1),
+            primary_isp_ip: Some(Ipv4Addr::new(192, 168, 1, 10)),
+            kill_switch_enabled: false,
+            dns_leak_protection: true,
+            ipv6_leak_block: true,
+        };
+
+        let proxy = start_proxy_listener(Ipv4Addr::LOCALHOST, 0, upstream)
+            .await
+            .expect("proxy listener should start");
+
+        // 1. Test SOCKS5 CONNECT
+        let mut s5 = match TcpStream::connect(proxy.listen_addr).await {
+            Ok(s) => s,
+            Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+                proxy.stop();
+                return;
+            }
+            Err(e) => panic!("unexpected connect error: {e}"),
+        };
+        s5.write_all(&[0x05, 0x01, 0x00]).await.unwrap();
+        let mut greet = [0u8; 2];
+        s5.read_exact(&mut greet).await.unwrap();
+        assert_eq!(greet, [0x05, 0x00]);
+
+        let mut req = vec![0x05, 0x01, 0x00, 0x01, 127, 0, 0, 1];
+        req.extend_from_slice(&echo_addr.port().to_be_bytes());
+        s5.write_all(&req).await.unwrap();
+        let mut rep = [0u8; 10];
+        s5.read_exact(&mut rep).await.unwrap();
+        assert_eq!(rep[1], 0x00);
+
+        s5.write_all(b"ping-socks5").await.unwrap();
+        let mut out = [0u8; 11];
+        s5.read_exact(&mut out).await.unwrap();
+        assert_eq!(&out, b"ping-socks5");
+
+        // 2. Test HTTP CONNECT on the exact same dual-protocol port
+        let mut hc = TcpStream::connect(proxy.listen_addr).await.unwrap();
+        let connect_req = format!(
+            "CONNECT 127.0.0.1:{} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\n\r\n",
+            echo_addr.port(),
+            echo_addr.port()
+        );
+        hc.write_all(connect_req.as_bytes()).await.unwrap();
+        let mut http_rep = [0u8; 39];
+        hc.read_exact(&mut http_rep).await.unwrap();
+        assert!(String::from_utf8_lossy(&http_rep).starts_with("HTTP/1.1 200"));
+
+        hc.write_all(b"ping-http").await.unwrap();
+        let mut out_http = [0u8; 9];
+        hc.read_exact(&mut out_http).await.unwrap();
+        assert_eq!(&out_http, b"ping-http");
+
+        proxy.stop();
     }
 }

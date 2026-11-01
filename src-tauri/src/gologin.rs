@@ -78,7 +78,12 @@ pub fn evaluate_leak_status(exit_ip: &str, host_isp_ip: Option<&str>) -> LeakSta
 }
 
 fn run_curl_with_config(curl_config_stdin: &str, extra_args: &[&str]) -> Result<String, String> {
-    let mut cmd = Command::new(r"C:\Windows\System32\curl.exe");
+    #[cfg(target_os = "windows")]
+    let curl_bin = r"C:\Windows\System32\curl.exe";
+    #[cfg(not(target_os = "windows"))]
+    let curl_bin = "/usr/bin/curl";
+
+    let mut cmd = Command::new(curl_bin);
     cmd.args(["-sS", "--max-time", "12", "-K", "-"])
         .args(extra_args)
         .stdin(Stdio::piped())
@@ -89,15 +94,15 @@ fn run_curl_with_config(curl_config_stdin: &str, extra_args: &[&str]) -> Result<
 
     let mut child = cmd
         .spawn()
-        .map_err(|e| format!("Failed to spawn curl.exe: {e}"))?;
+        .map_err(|e| format!("Failed to spawn curl: {e}"))?;
     if let Some(mut stdin) = child.stdin.take() {
         stdin
             .write_all(curl_config_stdin.as_bytes())
-            .map_err(|e| format!("Failed to pass config to curl.exe: {e}"))?;
+            .map_err(|e| format!("Failed to pass config to curl: {e}"))?;
     }
     let out = child
         .wait_with_output()
-        .map_err(|e| format!("Failed waiting for curl.exe: {e}"))?;
+        .map_err(|e| format!("Failed waiting for curl: {e}"))?;
     if !out.status.success() {
         return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
     }
@@ -250,12 +255,27 @@ fn parse_geo_json(raw: &str) -> Option<(String, String, String, String)> {
     Some((ip, country, city, org))
 }
 
-pub fn detect_host_isp_ip_blocking() -> Option<String> {
+pub fn detect_host_isp_ip_with_interface_blocking(primary_isp_ip: Option<&str>) -> Option<String> {
     let endpoints = [
         "https://ipwho.is/",
         "https://ipinfo.io/json",
         "https://api.ipify.org?format=json",
     ];
+
+    if let Some(ip) = primary_isp_ip {
+        let trimmed_ip = ip.trim();
+        if !trimmed_ip.is_empty() && trimmed_ip.parse::<std::net::Ipv4Addr>().is_ok() {
+            for url in endpoints {
+                let cfg = format!("url = \"{url}\"\ninterface = \"{trimmed_ip}\"\n");
+                if let Ok(raw) = run_curl_with_config(&cfg, &["--max-time", "5"]) {
+                    if let Some((ip, _, _, _)) = parse_geo_json(&raw) {
+                        return Some(ip);
+                    }
+                }
+            }
+        }
+    }
+
     for url in endpoints {
         let cfg = format!("url = \"{url}\"\n");
         if let Ok(raw) = run_curl_with_config(&cfg, &["--max-time", "5"]) {
@@ -265,6 +285,10 @@ pub fn detect_host_isp_ip_blocking() -> Option<String> {
         }
     }
     None
+}
+
+pub fn detect_host_isp_ip_blocking() -> Option<String> {
+    detect_host_isp_ip_with_interface_blocking(None)
 }
 
 pub fn check_slot_egress_blocking(local_port: u16, host_isp_ip: Option<&str>) -> EgressCheckResult {
