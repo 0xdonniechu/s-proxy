@@ -120,6 +120,98 @@ fn read_catalog_file(filename: &str) -> Option<String> {
     None
 }
 
+/// Returns `(timezone_tier, country_rank)` for curated high-quality countries in the
+/// same timezone (`UTC+7`) and adjacent high-bandwidth APAC submarine cable hubs (`UTC+8` / `UTC+9`).
+/// Returns `None` for non-priority countries so only high-quality regional nodes are shown.
+pub fn priority_country_rank(country_code: &str) -> Option<(u8, u8)> {
+    match country_code.trim().to_ascii_uppercase().as_str() {
+        // Tier 1: Same Timezone (UTC+7 — Direct SEA Peering)
+        "VN" => Some((1, 1)),
+        "TH" => Some((1, 2)),
+        "ID" => Some((1, 3)),
+        "KH" => Some((1, 4)),
+        // Tier 2: Adjacent Timezone (UTC+8 — Tier-1 APAC Submarine Cable Hubs)
+        "SG" => Some((2, 1)),
+        "HK" => Some((2, 2)),
+        "TW" => Some((2, 3)),
+        "MY" => Some((2, 4)),
+        "PH" => Some((2, 5)),
+        // Tier 3: East Asia High-Capacity Backbone (UTC+9)
+        "JP" => Some((3, 1)),
+        "KR" => Some((3, 2)),
+        _ => None,
+    }
+}
+
+pub fn location_sort_key(loc: &SurfsharkLocation) -> (u8, u8, u8, u32, String, String) {
+    if loc.region.eq_ignore_ascii_case("Custom") {
+        return (
+            0,
+            0,
+            0,
+            loc.load,
+            loc.location.clone(),
+            loc.connection_name.clone(),
+        );
+    }
+    let (tier, country_rank) = priority_country_rank(&loc.country_code).unwrap_or((9, 99));
+    let type_rank = match loc.location_type {
+        LocationType::Generic => 0,
+        LocationType::Static => 1,
+    };
+    (
+        tier,
+        type_rank,
+        country_rank,
+        loc.load,
+        loc.location.clone(),
+        loc.connection_name.clone(),
+    )
+}
+
+pub fn curate_and_sort_locations(catalog: Vec<SurfsharkLocation>) -> Vec<SurfsharkLocation> {
+    let mut filtered: Vec<SurfsharkLocation> = catalog
+        .into_iter()
+        .filter(|loc| {
+            loc.region.eq_ignore_ascii_case("Custom")
+                || priority_country_rank(&loc.country_code).is_some()
+        })
+        .collect();
+
+    filtered.sort_by_key(location_sort_key);
+
+    let mut counts: std::collections::HashMap<(String, u8), usize> =
+        std::collections::HashMap::new();
+    let mut curated = Vec::with_capacity(filtered.len());
+
+    for loc in filtered {
+        if loc.region.eq_ignore_ascii_case("Custom") {
+            curated.push(loc);
+            continue;
+        }
+        let type_tag = match loc.location_type {
+            LocationType::Generic => 0,
+            LocationType::Static => 1,
+        };
+        let key = (loc.country_code.to_ascii_uppercase(), type_tag);
+        let current_count = counts.entry(key).or_insert(0);
+        let max_per_country = match loc.location_type {
+            LocationType::Generic => 2,
+            LocationType::Static => 3,
+        };
+        if *current_count >= max_per_country {
+            continue;
+        }
+        if *current_count > 0 && loc.load > 65 {
+            continue;
+        }
+        *current_count += 1;
+        curated.push(loc);
+    }
+
+    curated
+}
+
 pub fn load_local_catalog() -> Vec<SurfsharkLocation> {
     let mut catalog = Vec::new();
 
@@ -160,14 +252,7 @@ pub fn load_local_catalog() -> Vec<SurfsharkLocation> {
         }
     }
 
-    catalog.sort_by(|a, b| {
-        a.country
-            .cmp(&b.country)
-            .then_with(|| a.location.cmp(&b.location))
-            .then_with(|| a.load.cmp(&b.load))
-    });
-
-    catalog
+    curate_and_sort_locations(catalog)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -576,12 +661,18 @@ mod tests {
             for window in catalog.windows(2) {
                 let a = &window[0];
                 let b = &window[1];
-                let ord = a
-                    .country
-                    .cmp(&b.country)
-                    .then_with(|| a.location.cmp(&b.location))
-                    .then_with(|| a.load.cmp(&b.load));
-                assert!(ord != std::cmp::Ordering::Greater, "Catalog must be sorted");
+                let ord = location_sort_key(a).cmp(&location_sort_key(b));
+                assert!(
+                    ord != std::cmp::Ordering::Greater,
+                    "Catalog must be sorted by timezone tier & quality"
+                );
+            }
+            for loc in &catalog {
+                assert!(
+                    priority_country_rank(&loc.country_code).is_some(),
+                    "Only curated same/adjacent timezone countries should be included, found {}",
+                    loc.country_code
+                );
             }
         }
     }
@@ -813,17 +904,15 @@ utun100: flags=8051<UP,POINTOPOINT,RUNNING,MULTICAST> mtu 1280 index 22
             .exists()
         {
             let catalog = load_local_catalog();
-            assert_eq!(catalog.len(), 180);
-            let generic_count = catalog
+            assert!(!catalog.is_empty());
+            assert_eq!(catalog[0].country_code, "VN");
+            assert!(catalog.iter().any(|l| l.country_code == "SG"));
+            assert!(catalog
                 .iter()
-                .filter(|l| l.location_type == LocationType::Generic)
-                .count();
-            let static_count = catalog
+                .any(|l| l.location_type == LocationType::Generic));
+            assert!(catalog
                 .iter()
-                .filter(|l| l.location_type == LocationType::Static)
-                .count();
-            assert_eq!(generic_count, 142);
-            assert_eq!(static_count, 38);
+                .any(|l| l.location_type == LocationType::Static));
         }
     }
 }

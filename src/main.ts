@@ -81,6 +81,71 @@ function renderFlagBadge(countryCode: string): string {
   return `<span class="flag-badge" aria-label="${escapeHtml(code)}">${escapeHtml(code)}</span>`;
 }
 
+function getLocationTimezoneMeta(loc: SurfsharkLocation): {
+  tier: 0 | 1 | 2 | 3;
+  tzBadge: string;
+  groupLabel: string;
+} {
+  const isVi = currentLanguage === "vi";
+  if (loc.region === "Custom") {
+    return {
+      tier: 0,
+      tzBadge: isVi ? "Tùy chỉnh" : "Custom",
+      groupLabel: isVi ? "⚙ Máy chủ Tùy chỉnh (.conf)" : "⚙ Custom Imported Servers (.conf)",
+    };
+  }
+  const cc = (loc.countryCode || "").toUpperCase();
+  if (["VN", "TH", "ID", "KH", "LA"].includes(cc)) {
+    return {
+      tier: 1,
+      tzBadge: isVi ? "UTC+7 • Cùng múi giờ" : "UTC+7 • Same TZ",
+      groupLabel: isVi
+        ? "🕒 UTC+7 — Cùng múi giờ (Việt Nam, Thái Lan, ĐNÁ)"
+        : "🕒 UTC+7 — Same Timezone (Vietnam, Thailand, SEA)",
+    };
+  }
+  if (["SG", "HK", "TW", "MY", "PH", "MO"].includes(cc)) {
+    return {
+      tier: 2,
+      tzBadge: isVi ? "UTC+8 • Hub Cáp biển" : "UTC+8 • Cable Hub",
+      groupLabel: isVi
+        ? "⚡ UTC+8 — Cận múi giờ & Cáp biển nhanh (Singapore, HK, Đài Loan)"
+        : "⚡ UTC+8 — Nearby Tier-1 Cable Hubs (Singapore, HK, Taiwan)",
+    };
+  }
+  return {
+    tier: 3,
+    tzBadge: isVi ? "UTC+9 • Trục Đông Á" : "UTC+9 • East Asia",
+    groupLabel: isVi
+      ? "🚀 UTC+9 — Trục Đông Á băng thông lớn (Nhật Bản, Hàn Quốc)"
+      : "🚀 UTC+9 — East Asia High-Speed Backbone (Japan, South Korea)",
+  };
+}
+
+function renderGroupedLocationOptions(locations: SurfsharkLocation[]): string {
+  const groups = new Map<string, SurfsharkLocation[]>();
+  for (const loc of locations) {
+    const meta = getLocationTimezoneMeta(loc);
+    const list = groups.get(meta.groupLabel) || [];
+    list.push(loc);
+    groups.set(meta.groupLabel, list);
+  }
+  let html = "";
+  for (const [groupLabel, locs] of groups.entries()) {
+    const opts = locs
+      .map((loc) => {
+        const meta = getLocationTimezoneMeta(loc);
+        const typeSuffix = loc.locationType === "static" ? " • Static IP" : "";
+        return `<option value="${escapeHtml(loc.id)}" data-default-name="${escapeHtml(`${loc.countryCode} • ${loc.country} - ${loc.location}`)}">
+          [${escapeHtml(loc.countryCode)}] ${escapeHtml(loc.country)} — ${escapeHtml(loc.location)} (${escapeHtml(meta.tzBadge)}${typeSuffix} • ${loc.load}% load)
+        </option>`;
+      })
+      .join("");
+    html += `<optgroup label="${escapeHtml(groupLabel)}">${opts}</optgroup>`;
+  }
+  return html;
+}
+
 // IPC helper wrappers
 async function fetchSnapshot(): Promise<void> {
   try {
@@ -678,14 +743,7 @@ function renderHubTab(snap: HubSnapshot): string {
     })
     .join("");
 
-  const multiServerOptions = snap.locations
-    .map(
-      (loc) =>
-        `<option value="${escapeHtml(loc.id)}" data-default-name="${escapeHtml(`${loc.countryCode} • ${loc.country} - ${loc.location}`)}">
-          [${escapeHtml(loc.countryCode)}] ${escapeHtml(loc.country)} — ${escapeHtml(loc.location)} (${escapeHtml(loc.connectionName)} • ${loc.load}%)
-        </option>`
-    )
-    .join("");
+  const multiServerOptions = renderGroupedLocationOptions(snap.locations);
 
   const modalHtml = isCreateBridgeModalOpen
     ? `
@@ -1094,7 +1152,7 @@ function renderCatalogTab(snap: HubSnapshot): string {
     );
   });
 
-  // Recommended for you: Fastest (lowest load) & Nearest country (Singapore or lowest load nearby)
+  // Recommended for you: Best Same-Timezone (UTC+7) & Lowest-load APAC Cable Hub (UTC+8)
   let fastestLoc: SurfsharkLocation | null = null;
   let nearestLoc: SurfsharkLocation | null = null;
 
@@ -1104,18 +1162,24 @@ function renderCatalogTab(snap: HubSnapshot): string {
       : snap.locations.filter((l) => l.provider === catalogProviderFilter);
 
   if (poolForRec.length > 0) {
+    const utc7Pool = poolForRec
+      .filter((l) => ["VN", "TH", "ID", "KH", "LA"].includes(l.countryCode.toUpperCase()))
+      .sort((a, b) => a.load - b.load);
+    const utc8HubPool = poolForRec
+      .filter(
+        (l) =>
+          ["SG", "HK", "TW", "MY", "PH"].includes(l.countryCode.toUpperCase()) &&
+          l.locationType === "generic"
+      )
+      .sort((a, b) => a.load - b.load);
     const sortedByLoad = [...poolForRec].sort((a, b) => a.load - b.load);
-    fastestLoc = sortedByLoad[0] || null;
 
-    const sgLoc = poolForRec.find((l) => l.countryCode === "SG");
-    if (sgLoc && sgLoc.id !== fastestLoc?.id) {
-      nearestLoc = sgLoc;
-    } else {
-      nearestLoc =
-        sortedByLoad.find((l) => l.countryCode !== fastestLoc?.countryCode) ||
-        sortedByLoad[1] ||
-        fastestLoc;
-    }
+    nearestLoc = utc7Pool.find((l) => l.countryCode.toUpperCase() === "VN") || utc7Pool[0] || sortedByLoad[0] || null;
+    fastestLoc =
+      utc8HubPool.find((l) => l.countryCode.toUpperCase() === "SG") ||
+      utc8HubPool[0] ||
+      sortedByLoad.find((l) => l.id !== nearestLoc?.id) ||
+      nearestLoc;
   }
 
   const providerTabsHtml = [
@@ -1142,6 +1206,11 @@ function renderCatalogTab(snap: HubSnapshot): string {
             const loadClass = loc.load > 70 ? "load-high" : loc.load > 40 ? "load-med" : "load-low";
             const provShort = loc.provider.toUpperCase();
             const isCustomLoc = loc.region === "Custom";
+            const tzMeta = getLocationTimezoneMeta(loc);
+            const typeBadge =
+              loc.locationType === "static"
+                ? `<span class="badge badge-os mono" style="font-size:10px;padding:1px 6px;">Static IP</span>`
+                : "";
             return `
               <div class="surf-card location-card">
                 <div class="loc-card-main">
@@ -1149,8 +1218,8 @@ function renderCatalogTab(snap: HubSnapshot): string {
                     ${renderFlagBadge(loc.countryCode)}
                   </div>
                   <div class="loc-info-col">
-                    <div class="loc-country">${escapeHtml(loc.country)}</div>
-                    <div class="loc-city">${escapeHtml(loc.location)}</div>
+                    <div class="loc-country">${escapeHtml(loc.country)} ${typeBadge}</div>
+                    <div class="loc-city">${escapeHtml(loc.location)} &bull; <span class="mono">${escapeHtml(tzMeta.tzBadge)}</span></div>
                   </div>
                   <div class="loc-load-col">
                     <span class="load-pill ${loadClass}">${loc.load}%</span>

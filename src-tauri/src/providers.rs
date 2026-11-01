@@ -162,7 +162,8 @@ pub fn load_cached_provider_locations(provider: VpnProvider) -> Vec<SurfsharkLoc
     let Ok(raw) = fs::read_to_string(path) else {
         return Vec::new();
     };
-    serde_json::from_str::<Vec<SurfsharkLocation>>(&raw).unwrap_or_default()
+    let parsed = serde_json::from_str::<Vec<SurfsharkLocation>>(&raw).unwrap_or_default();
+    crate::surfshark::curate_and_sort_locations(parsed)
 }
 
 pub fn save_cached_provider_locations(
@@ -407,9 +408,10 @@ pub fn fetch_nordvpn_private_key_blocking(access_token: &str) -> Result<String, 
 pub fn fetch_nordvpn_catalog_blocking() -> Result<Vec<SurfsharkLocation>, String> {
     let url = "https://api.nordvpn.com/v1/servers?limit=300&filters%5Bservers_technologies%5D%5Bidentifier%5D=wireguard_udp";
     let body = run_curl_get(url, None)?;
-    let locs = parse_nordvpn_servers_json(&body)?;
+    let raw_locs = parse_nordvpn_servers_json(&body)?;
+    let locs = crate::surfshark::curate_and_sort_locations(raw_locs);
     if locs.is_empty() {
-        return Err("NordVPN returned 0 WireGuard servers".to_string());
+        return Err("NordVPN returned 0 regional WireGuard servers".to_string());
     }
     save_cached_provider_locations(VpnProvider::Nordvpn, &locs)?;
     Ok(locs)
@@ -554,9 +556,10 @@ pub fn parse_mullvad_relays_json(raw: &str) -> Result<Vec<SurfsharkLocation>, St
 
 pub fn fetch_mullvad_catalog_blocking() -> Result<Vec<SurfsharkLocation>, String> {
     let body = run_curl_get("https://api.mullvad.net/www/relays/wireguard/", None)?;
-    let locs = parse_mullvad_relays_json(&body)?;
+    let raw_locs = parse_mullvad_relays_json(&body)?;
+    let locs = crate::surfshark::curate_and_sort_locations(raw_locs);
     if locs.is_empty() {
-        return Err("Mullvad API returned 0 WireGuard relays".to_string());
+        return Err("Mullvad API returned 0 regional WireGuard relays".to_string());
     }
     save_cached_provider_locations(VpnProvider::Mullvad, &locs)?;
     Ok(locs)
