@@ -162,7 +162,8 @@ pub fn load_cached_provider_locations(provider: VpnProvider) -> Vec<SurfsharkLoc
     let Ok(raw) = fs::read_to_string(path) else {
         return Vec::new();
     };
-    serde_json::from_str::<Vec<SurfsharkLocation>>(&raw).unwrap_or_default()
+    let parsed = serde_json::from_str::<Vec<SurfsharkLocation>>(&raw).unwrap_or_default();
+    crate::surfshark::curate_and_sort_locations(parsed)
 }
 
 pub fn save_cached_provider_locations(
@@ -191,7 +192,12 @@ pub fn validate_provider_network_fields(address: &str, dns: &str) -> Result<(Str
 }
 
 fn run_curl_get(url: &str, basic_auth: Option<&str>) -> Result<String, String> {
-    let mut cmd = Command::new(r"C:\Windows\System32\curl.exe");
+    #[cfg(target_os = "windows")]
+    let curl_bin = r"C:\Windows\System32\curl.exe";
+    #[cfg(not(target_os = "windows"))]
+    let curl_bin = "/usr/bin/curl";
+
+    let mut cmd = Command::new(curl_bin);
     cmd.args([
         "-sS",
         "-fL",
@@ -211,7 +217,7 @@ fn run_curl_get(url: &str, basic_auth: Option<&str>) -> Result<String, String> {
 
     let mut child = cmd
         .spawn()
-        .map_err(|e| format!("Failed to spawn curl.exe: {e}"))?;
+        .map_err(|e| format!("Failed to spawn curl: {e}"))?;
     if let Some(auth) = basic_auth {
         let safe_auth: String = auth
             .chars()
@@ -221,12 +227,12 @@ fn run_curl_get(url: &str, basic_auth: Option<&str>) -> Result<String, String> {
         if let Some(mut stdin) = child.stdin.take() {
             stdin
                 .write_all(config_line.as_bytes())
-                .map_err(|e| format!("Failed to pass auth config to curl.exe: {e}"))?;
+                .map_err(|e| format!("Failed to pass auth config to curl: {e}"))?;
         }
     }
     let out = child
         .wait_with_output()
-        .map_err(|e| format!("Failed to execute curl.exe: {e}"))?;
+        .map_err(|e| format!("Failed to execute curl: {e}"))?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
         return Err(if stderr.is_empty() {
@@ -356,7 +362,7 @@ pub fn parse_nordvpn_servers_json(raw: &str) -> Result<Vec<SurfsharkLocation>, S
             })
             .unwrap_or_else(|| ("NordVPN".to_string(), "UN".to_string(), entry.name.clone()));
 
-        locations.push(SurfsharkLocation {
+        let mut loc = SurfsharkLocation {
             id: format!("nordvpn-{}", entry.id),
             provider: VpnProvider::Nordvpn,
             country,
@@ -367,7 +373,12 @@ pub fn parse_nordvpn_servers_json(raw: &str) -> Result<Vec<SurfsharkLocation>, S
             connection_name: conn_host,
             pub_key,
             location_type: LocationType::Generic,
-        });
+            tz_group: String::new(),
+            utc_offset: String::new(),
+            iana_timezone: String::new(),
+        };
+        let _ = crate::surfshark::populate_location_timezone(&mut loc);
+        locations.push(loc);
     }
 
     locations.sort_by(|a, b| {
@@ -402,9 +413,10 @@ pub fn fetch_nordvpn_private_key_blocking(access_token: &str) -> Result<String, 
 pub fn fetch_nordvpn_catalog_blocking() -> Result<Vec<SurfsharkLocation>, String> {
     let url = "https://api.nordvpn.com/v1/servers?limit=300&filters%5Bservers_technologies%5D%5Bidentifier%5D=wireguard_udp";
     let body = run_curl_get(url, None)?;
-    let locs = parse_nordvpn_servers_json(&body)?;
+    let raw_locs = parse_nordvpn_servers_json(&body)?;
+    let locs = crate::surfshark::curate_and_sort_locations(raw_locs);
     if locs.is_empty() {
-        return Err("NordVPN returned 0 WireGuard servers".to_string());
+        return Err("NordVPN returned 0 regional WireGuard servers".to_string());
     }
     save_cached_provider_locations(VpnProvider::Nordvpn, &locs)?;
     Ok(locs)
@@ -470,7 +482,7 @@ pub fn parse_mullvad_relays_json(raw: &str) -> Result<Vec<SurfsharkLocation>, St
                         if conn.is_empty() {
                             continue;
                         }
-                        locations.push(SurfsharkLocation {
+                        let mut loc = SurfsharkLocation {
                             id: format!("mullvad-{}", relay.hostname),
                             provider: VpnProvider::Mullvad,
                             country: country.name.clone(),
@@ -481,7 +493,12 @@ pub fn parse_mullvad_relays_json(raw: &str) -> Result<Vec<SurfsharkLocation>, St
                             connection_name: conn,
                             pub_key: relay.public_key.trim().to_string(),
                             location_type: LocationType::Generic,
-                        });
+                            tz_group: String::new(),
+                            utc_offset: String::new(),
+                            iana_timezone: String::new(),
+                        };
+                        let _ = crate::surfshark::populate_location_timezone(&mut loc);
+                        locations.push(loc);
                     }
                 }
             }
@@ -525,7 +542,7 @@ pub fn parse_mullvad_relays_json(raw: &str) -> Result<Vec<SurfsharkLocation>, St
         if conn.is_empty() {
             continue;
         }
-        locations.push(SurfsharkLocation {
+        let mut loc = SurfsharkLocation {
             id: format!("mullvad-{}", relay.hostname),
             provider: VpnProvider::Mullvad,
             country: relay.country_name,
@@ -536,7 +553,12 @@ pub fn parse_mullvad_relays_json(raw: &str) -> Result<Vec<SurfsharkLocation>, St
             connection_name: conn,
             pub_key: relay.pubkey.trim().to_string(),
             location_type: LocationType::Generic,
-        });
+            tz_group: String::new(),
+            utc_offset: String::new(),
+            iana_timezone: String::new(),
+        };
+        let _ = crate::surfshark::populate_location_timezone(&mut loc);
+        locations.push(loc);
     }
 
     locations.sort_by(|a, b| {
@@ -549,9 +571,10 @@ pub fn parse_mullvad_relays_json(raw: &str) -> Result<Vec<SurfsharkLocation>, St
 
 pub fn fetch_mullvad_catalog_blocking() -> Result<Vec<SurfsharkLocation>, String> {
     let body = run_curl_get("https://api.mullvad.net/www/relays/wireguard/", None)?;
-    let locs = parse_mullvad_relays_json(&body)?;
+    let raw_locs = parse_mullvad_relays_json(&body)?;
+    let locs = crate::surfshark::curate_and_sort_locations(raw_locs);
     if locs.is_empty() {
-        return Err("Mullvad API returned 0 WireGuard relays".to_string());
+        return Err("Mullvad API returned 0 regional WireGuard relays".to_string());
     }
     save_cached_provider_locations(VpnProvider::Mullvad, &locs)?;
     Ok(locs)
@@ -574,7 +597,7 @@ pub fn parse_and_build_custom_location(
                 .chars()
                 .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
                 .collect();
-            Some(SurfsharkLocation {
+            let mut loc = SurfsharkLocation {
                 id: format!("{}-{}", provider.id_str(), slug),
                 provider,
                 country: provider.display_name().to_string(),
@@ -592,7 +615,12 @@ pub fn parse_and_build_custom_location(
                 connection_name: endpoint,
                 pub_key,
                 location_type: LocationType::Generic,
-            })
+                tz_group: "custom".to_string(),
+                utc_offset: "Custom".to_string(),
+                iana_timezone: "Custom/WireGuard".to_string(),
+            };
+            let _ = crate::surfshark::populate_location_timezone(&mut loc);
+            Some(loc)
         }
         _ => None,
     };

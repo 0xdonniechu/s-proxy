@@ -12,8 +12,32 @@ use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+#[cfg(target_os = "windows")]
+const WIREPROXY_BINARY_NAME: &str = "wireproxy.exe";
+#[cfg(not(target_os = "windows"))]
+const WIREPROXY_BINARY_NAME: &str = "wireproxy";
+
+#[cfg(target_os = "windows")]
+const WIREPROXY_ARCHIVE_NAME: &str = "wireproxy_windows_amd64.tar.gz";
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+const WIREPROXY_ARCHIVE_NAME: &str = "wireproxy_darwin_arm64.tar.gz";
+#[cfg(all(target_os = "macos", not(target_arch = "aarch64")))]
+const WIREPROXY_ARCHIVE_NAME: &str = "wireproxy_darwin_amd64.tar.gz";
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+const WIREPROXY_ARCHIVE_NAME: &str = "wireproxy_linux_amd64.tar.gz";
+
+#[cfg(target_os = "windows")]
 const WIREPROXY_RELEASE_URL: &str =
     "https://github.com/octeep/wireproxy/releases/download/v1.0.9/wireproxy_windows_amd64.tar.gz";
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+const WIREPROXY_RELEASE_URL: &str =
+    "https://github.com/octeep/wireproxy/releases/download/v1.0.9/wireproxy_darwin_arm64.tar.gz";
+#[cfg(all(target_os = "macos", not(target_arch = "aarch64")))]
+const WIREPROXY_RELEASE_URL: &str =
+    "https://github.com/octeep/wireproxy/releases/download/v1.0.9/wireproxy_darwin_amd64.tar.gz";
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+const WIREPROXY_RELEASE_URL: &str =
+    "https://github.com/octeep/wireproxy/releases/download/v1.0.9/wireproxy_linux_amd64.tar.gz";
 
 pub struct WireproxyHandle {
     child: Child,
@@ -113,7 +137,7 @@ pub fn render_wireproxy_conf(
 }
 
 pub fn managed_wireproxy_path() -> PathBuf {
-    app_data_dir().join("bin").join("wireproxy.exe")
+    app_data_dir().join("bin").join(WIREPROXY_BINARY_NAME)
 }
 
 pub fn cleanup_stale_runtime_configs() {
@@ -140,33 +164,67 @@ pub fn resolve_wireproxy_binary(custom_path: &str) -> Option<PathBuf> {
     if managed.is_file() {
         return Some(managed);
     }
-    let mut cmd = Command::new("where.exe");
-    cmd.arg("wireproxy.exe")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-    if let Ok(output) = cmd.output() {
-        if output.status.success() {
-            let text = String::from_utf8_lossy(&output.stdout);
-            if let Some(first_line) = text.lines().next() {
-                let candidate = PathBuf::from(first_line.trim());
-                if candidate.is_file() {
-                    return Some(candidate);
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        for std_path in ["/opt/homebrew/bin/wireproxy", "/usr/local/bin/wireproxy"] {
+            let candidate = PathBuf::from(std_path);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+        let mut cmd = Command::new("/usr/bin/which");
+        cmd.arg("wireproxy")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        if let Ok(output) = cmd.output() {
+            if output.status.success() {
+                let text = String::from_utf8_lossy(&output.stdout);
+                if let Some(first_line) = text.lines().next() {
+                    let candidate = PathBuf::from(first_line.trim());
+                    if candidate.is_file() {
+                        return Some(candidate);
+                    }
                 }
             }
         }
     }
+
+    #[cfg(target_os = "windows")]
+    {
+        let mut cmd = Command::new("where.exe");
+        cmd.arg("wireproxy.exe")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        if let Ok(output) = cmd.output() {
+            if output.status.success() {
+                let text = String::from_utf8_lossy(&output.stdout);
+                if let Some(first_line) = text.lines().next() {
+                    let candidate = PathBuf::from(first_line.trim());
+                    if candidate.is_file() {
+                        return Some(candidate);
+                    }
+                }
+            }
+        }
+    }
+
     None
 }
 
 pub fn install_wireproxy_binary() -> Result<PathBuf, String> {
     let bin_dir = app_data_dir().join("bin");
     fs::create_dir_all(&bin_dir).map_err(|e| format!("Failed to create bin dir: {e}"))?;
-    let archive_path = bin_dir.join("wireproxy_windows_amd64.tar.gz");
-    let target_exe = bin_dir.join("wireproxy.exe");
+    let archive_path = bin_dir.join(WIREPROXY_ARCHIVE_NAME);
+    let target_exe = bin_dir.join(WIREPROXY_BINARY_NAME);
 
-    let mut curl_cmd = Command::new(r"C:\Windows\System32\curl.exe");
+    #[cfg(target_os = "windows")]
+    let curl_bin = r"C:\Windows\System32\curl.exe";
+    #[cfg(not(target_os = "windows"))]
+    let curl_bin = "/usr/bin/curl";
+
+    let mut curl_cmd = Command::new(curl_bin);
     curl_cmd
         .args([
             "-fL",
@@ -183,7 +241,7 @@ pub fn install_wireproxy_binary() -> Result<PathBuf, String> {
 
     let curl_out = curl_cmd
         .output()
-        .map_err(|e| format!("Failed to execute curl.exe: {e}"))?;
+        .map_err(|e| format!("Failed to execute curl: {e}"))?;
     if !curl_out.status.success() {
         return Err(format!(
             "Failed to download wireproxy release: {}",
@@ -191,14 +249,19 @@ pub fn install_wireproxy_binary() -> Result<PathBuf, String> {
         ));
     }
 
-    let mut tar_cmd = Command::new(r"C:\Windows\System32\tar.exe");
+    #[cfg(target_os = "windows")]
+    let tar_bin = r"C:\Windows\System32\tar.exe";
+    #[cfg(not(target_os = "windows"))]
+    let tar_bin = "/usr/bin/tar";
+
+    let mut tar_cmd = Command::new(tar_bin);
     tar_cmd
         .args([
             "-xzf",
             &archive_path.to_string_lossy(),
             "-C",
             &bin_dir.to_string_lossy(),
-            "wireproxy.exe",
+            WIREPROXY_BINARY_NAME,
         ])
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
@@ -212,9 +275,15 @@ pub fn install_wireproxy_binary() -> Result<PathBuf, String> {
 
     if !tar_out.status.success() || !target_exe.is_file() {
         return Err(format!(
-            "Failed to unpack wireproxy.exe: {}",
+            "Failed to unpack {WIREPROXY_BINARY_NAME}: {}",
             String::from_utf8_lossy(&tar_out.stderr).trim()
         ));
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&target_exe, fs::Permissions::from_mode(0o755));
     }
 
     Ok(target_exe)
@@ -240,7 +309,9 @@ pub async fn spawn_wireproxy_for_slot(
     connection_name: &str,
 ) -> Result<WireproxyHandle, String> {
     let bin_path = resolve_wireproxy_binary(custom_wireproxy_path).ok_or_else(|| {
-        "Missing wireproxy.exe binary. Click 'Install Wireproxy' in Settings first.".to_string()
+        format!(
+            "Missing {WIREPROXY_BINARY_NAME} binary. Click 'Install Wireproxy' in Settings first."
+        )
     })?;
 
     let internal_port = allocate_ephemeral_loopback_port()?;
@@ -263,6 +334,11 @@ pub async fn spawn_wireproxy_for_slot(
     let conf_path = runtime_dir.join(format!("wg-{safe_id}-{internal_port}.conf"));
     fs::write(&conf_path, conf_text)
         .map_err(|e| format!("Failed to write temporary wireproxy config: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&conf_path, fs::Permissions::from_mode(0o600));
+    }
 
     let mut cmd = Command::new(&bin_path);
     cmd.args(["-c", &conf_path.to_string_lossy()])
@@ -274,7 +350,7 @@ pub async fn spawn_wireproxy_for_slot(
 
     let mut child = cmd.spawn().map_err(|e| {
         let _ = fs::remove_file(&conf_path);
-        format!("Failed to start wireproxy.exe: {e}")
+        format!("Failed to start {WIREPROXY_BINARY_NAME}: {e}")
     })?;
 
     let internal_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, internal_port));

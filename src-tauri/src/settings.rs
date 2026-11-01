@@ -378,10 +378,8 @@ pub fn parse_wg_conf(raw: &str) -> Result<ParsedWgConf, String> {
                         dns = first.trim().to_string();
                     }
                 }
-                "publickey" => {
-                    if !val.is_empty() {
-                        public_key = Some(val.to_string());
-                    }
+                "publickey" if !val.is_empty() => {
+                    public_key = Some(val.to_string());
                 }
                 "endpoint" => {
                     let clean_ep = val.trim();
@@ -424,11 +422,37 @@ pub fn parse_wg_conf(raw: &str) -> Result<ParsedWgConf, String> {
 }
 
 pub fn app_data_dir() -> PathBuf {
-    if let Ok(appdata) = std::env::var("APPDATA") {
-        PathBuf::from(appdata).join("com.donniechu.sproxy")
-    } else {
-        PathBuf::from(".").join(".sproxy-data")
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            if !appdata.trim().is_empty() {
+                return PathBuf::from(appdata).join("com.donniechu.sproxy");
+            }
+        }
     }
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            if !home.trim().is_empty() {
+                return PathBuf::from(home)
+                    .join("Library")
+                    .join("Application Support")
+                    .join("com.donniechu.sproxy");
+            }
+        }
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            if !home.trim().is_empty() {
+                return PathBuf::from(home)
+                    .join(".local")
+                    .join("share")
+                    .join("com.donniechu.sproxy");
+            }
+        }
+    }
+    PathBuf::from(".").join(".sproxy-data")
 }
 
 pub fn state_file_path() -> PathBuf {
@@ -482,6 +506,11 @@ pub fn save_state_to_path(path: &Path, state: &PersistedState) -> Result<(), Str
         serde_json::to_string_pretty(state).map_err(|e| format!("Failed to serialize state: {e}"))?;
     let tmp_path = path.with_extension("json.tmp");
     fs::write(&tmp_path, serialized).map_err(|e| format!("Failed to write temp state: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&tmp_path, fs::Permissions::from_mode(0o600));
+    }
     fs::rename(&tmp_path, path).map_err(|e| format!("Failed to commit state.json: {e}"))?;
     Ok(())
 }

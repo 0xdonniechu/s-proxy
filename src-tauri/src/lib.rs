@@ -6,8 +6,9 @@ pub mod surfshark;
 pub mod wireguard;
 
 use gologin::{
-    check_slot_egress_blocking, detect_host_isp_ip_blocking, fetch_gologin_profiles_blocking,
-    update_gologin_profile_proxy_blocking, EgressCheckResult, GoLoginProfileSummary, LeakStatus,
+    check_slot_egress_blocking, detect_host_isp_ip_with_interface_blocking,
+    fetch_gologin_profiles_blocking, update_gologin_profile_proxy_blocking, EgressCheckResult,
+    GoLoginProfileSummary, LeakStatus,
 };
 use providers::{
     fetch_mullvad_catalog_blocking, fetch_nordvpn_catalog_blocking,
@@ -62,6 +63,9 @@ pub struct ProxySlotView {
     pub country_code: String,
     pub location_label: String,
     pub connection_name: String,
+    pub tz_group: String,
+    pub utc_offset: String,
+    pub iana_timezone: String,
     pub adapter_hint: String,
     pub bound_adapter_name: String,
     pub bound_adapter_ip: String,
@@ -328,6 +332,8 @@ impl HubCore {
         let wireproxy_ready =
             resolve_wireproxy_binary(&self.persisted.settings.wireproxy_path).is_some();
 
+        let all_locs = self.all_locations();
+
         let slots = self
             .persisted
             .slots
@@ -365,6 +371,33 @@ impl HubCore {
                         )
                     };
 
+                let (tz_group, utc_offset, iana_timezone) = all_locs
+                    .iter()
+                    .find(|l| l.id == cfg.location_id || l.connection_name == cfg.connection_name)
+                    .map(|l| {
+                        (
+                            l.tz_group.clone(),
+                            l.utc_offset.clone(),
+                            l.iana_timezone.clone(),
+                        )
+                    })
+                    .or_else(|| {
+                        surfshark::classify_location_timezone(
+                            &cfg.country_code,
+                            &cfg.location_label,
+                            &cfg.connection_name,
+                            "",
+                        )
+                        .map(|m| {
+                            (
+                                m.tz_group.to_string(),
+                                m.utc_offset.to_string(),
+                                m.iana_timezone.to_string(),
+                            )
+                        })
+                    })
+                    .unwrap_or_default();
+
                 ProxySlotView {
                     id: cfg.id.clone(),
                     name: cfg.name.clone(),
@@ -378,6 +411,9 @@ impl HubCore {
                     country_code: cfg.country_code.clone(),
                     location_label: cfg.location_label.clone(),
                     connection_name: cfg.connection_name.clone(),
+                    tz_group,
+                    utc_offset,
+                    iana_timezone,
                     adapter_hint: cfg.adapter_hint.clone(),
                     bound_adapter_name: bound_name,
                     bound_adapter_ip: bound_ip,
@@ -393,7 +429,6 @@ impl HubCore {
             })
             .collect();
 
-        let all_locs = self.all_locations();
         let providers: Vec<ProviderView> = VpnProvider::all()
             .into_iter()
             .map(|p| {
@@ -647,7 +682,12 @@ async fn refresh_system_state(state: State<'_, SharedHub>) -> Result<HubSnapshot
     let (adapters, locations, host_ip) = tokio::task::spawn_blocking(|| {
         let adapters = detect_windows_adapters();
         let locations = load_local_catalog();
-        let host_ip = detect_host_isp_ip_blocking();
+        let isp_ipv4 = adapters
+            .iter()
+            .find(|a| a.is_default_route && a.kind == AdapterKind::PrimaryIsp)
+            .or_else(|| adapters.iter().find(|a| a.kind == AdapterKind::PrimaryIsp && a.status_up))
+            .map(|a| a.ipv4.clone());
+        let host_ip = detect_host_isp_ip_with_interface_blocking(isp_ipv4.as_deref());
         (adapters, locations, host_ip)
     })
     .await
@@ -1007,6 +1047,67 @@ async fn create_slot(
 }
 
 #[tauri::command]
+async fn switch_slot_location(
+    slot_id: String,
+    location_id: String,
+    state: State<'_, SharedHub>,
+) -> Result<HubSnapshot, String> {
+    let hub = Arc::clone(&state);
+    let should_restart = {
+        let mut guard = hub.lock().map_err(|_| "State lock poisoned".to_string())?;
+        let all_locs = guard.all_locations();
+        let new_loc = all_locs
+            .into_iter()
+            .find(|l| l.id == location_id || l.connection_name == location_id)
+            .ok_or_else(|| "Selected replacement VPN server not found".to_string())?;
+
+        let slot = guard
+            .persisted
+            .slots
+            .iter_mut()
+            .find(|s| s.id == slot_id)
+            .ok_or_else(|| format!("Slot '{slot_id}' not found"))?;
+
+        if slot.mode != SlotMode::UserspaceWg {
+            return Err("Only Multi-VPN (Userspace WireGuard) slots can switch servers directly".to_string());
+        }
+
+        let old_auto_name = format!("{} • {}", slot.country_code, slot.location_label);
+        let new_loc_label = format!("{} - {}", new_loc.country, new_loc.location);
+        if slot.name.trim().is_empty() || slot.name == old_auto_name || slot.name.contains(" • ") {
+            slot.name = format!("{} • {}", new_loc.country_code, new_loc_label);
+        }
+        slot.provider = new_loc.provider;
+        slot.location_id = new_loc.id;
+        slot.country_code = new_loc.country_code;
+        slot.location_label = new_loc_label;
+        slot.connection_name = new_loc.connection_name;
+        slot.pub_key = new_loc.pub_key;
+
+        let was_active = guard.runtimes.get(&slot_id).is_some_and(|rt| {
+            matches!(
+                rt.status,
+                SlotRuntimeStatus::Running
+                    | SlotRuntimeStatus::Error
+                    | SlotRuntimeStatus::KillSwitch
+            )
+        });
+        if let Some(rt) = guard.runtimes.get_mut(&slot_id) {
+            rt.egress = None;
+        }
+        save_state_to_path(&state_file_path(), &guard.persisted)?;
+        was_active
+    };
+
+    if should_restart {
+        start_slot_internal(&hub, &slot_id).await?;
+    }
+
+    let guard = hub.lock().map_err(|_| "State lock poisoned".to_string())?;
+    Ok(guard.build_snapshot())
+}
+
+#[tauri::command]
 async fn toggle_slot(
     slot_id: String,
     start: bool,
@@ -1082,7 +1183,7 @@ async fn check_slot_ip(
     state: State<'_, SharedHub>,
 ) -> Result<HubSnapshot, String> {
     let hub = Arc::clone(&state);
-    let (port, host_isp_ip) = {
+    let (port, host_isp_ip, isp_ipv4) = {
         let guard = hub.lock().map_err(|_| "State lock poisoned".to_string())?;
         let slot = guard
             .persisted
@@ -1097,11 +1198,23 @@ async fn check_slot_ip(
         if !is_running {
             return Err("Start the proxy slot before checking its exit IP".to_string());
         }
-        (slot.port, guard.host_isp_ip.clone())
+        let isp_ipv4 = guard
+            .adapters
+            .iter()
+            .find(|a| a.is_default_route && a.kind == AdapterKind::PrimaryIsp)
+            .or_else(|| {
+                guard
+                    .adapters
+                    .iter()
+                    .find(|a| a.kind == AdapterKind::PrimaryIsp && a.status_up)
+            })
+            .map(|a| a.ipv4.clone());
+        (slot.port, guard.host_isp_ip.clone(), isp_ipv4)
     };
 
     let check_res = tokio::task::spawn_blocking(move || {
-        let isp = host_isp_ip.or_else(detect_host_isp_ip_blocking);
+        let isp = host_isp_ip
+            .or_else(|| detect_host_isp_ip_with_interface_blocking(isp_ipv4.as_deref()));
         let egress = check_slot_egress_blocking(port, isp.as_deref());
         (isp, egress)
     })
@@ -1333,8 +1446,9 @@ fn setup_tray(app: &AppHandle, hub: SharedHub) -> tauri::Result<()> {
 pub fn run() {
     let shared_hub: SharedHub = Arc::new(Mutex::new(HubCore::new()));
     let hub_for_setup = Arc::clone(&shared_hub);
+    let hub_for_exit = Arc::clone(&shared_hub);
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(shared_hub)
         .setup(move |app| {
@@ -1375,6 +1489,7 @@ pub fn run() {
             import_provider_conf,
             delete_custom_server,
             create_slot,
+            switch_slot_location,
             toggle_slot,
             start_all_slots,
             stop_all_slots,
@@ -1384,6 +1499,20 @@ pub fn run() {
             assign_slot_to_gologin,
             install_wireproxy
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running s-proxy tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building s-proxy tauri application");
+
+    app.run(move |app_handle, event| match event {
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Reopen { .. } => {
+            show_main_window(app_handle);
+        }
+        tauri::RunEvent::Exit => {
+            let _ = app_handle;
+            if let Ok(mut guard) = hub_for_exit.lock() {
+                guard.stop_all();
+            }
+        }
+        _ => {}
+    });
 }
