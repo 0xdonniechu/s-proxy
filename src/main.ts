@@ -2119,103 +2119,145 @@ function renderStatusTab(snap: HubSnapshot): string {
     .join("");
 
   return `
-    <!-- Top Overall Security Shield Banner -->
-    <div class="surf-card status-shield-banner">
-      <div class="shield-banner-left">
-        <div class="shield-badge-icon ${allActive ? "shield-badge-safe" : "shield-badge-warn"}">
-          ${allActive ? "🛡" : "⚠"}
-        </div>
-        <div class="shield-banner-meta">
-          <div class="shield-banner-title">
-            ${escapeHtml(allActive ? sp.allProtectionsActive : sp.customProtectionMode)}
+    <div class="security-view">
+      <div class="security-layout-2col">
+        <!-- Left Column: Shield Overview & Subsystems Health Monitor -->
+        <div class="security-col-left">
+          <!-- Top Overall Security Shield Banner -->
+          <div class="surf-card status-shield-banner">
+            <div class="shield-banner-top">
+              <div class="shield-badge-icon ${allActive ? "shield-badge-safe" : "shield-badge-warn"}">
+                ${allActive ? "🛡" : "⚠"}
+              </div>
+              <div class="shield-banner-meta">
+                <div class="shield-banner-title">
+                  ${escapeHtml(allActive ? sp.allProtectionsActive : sp.customProtectionMode)}
+                </div>
+                <div class="subtext">
+                  ${escapeHtml(allActive ? sp.allProtectionsDesc : sp.customProtectionDesc)}
+                </div>
+              </div>
+            </div>
+            <div class="shield-banner-actions">
+              ${
+                !allActive
+                  ? `<button type="button" class="btn btn-primary btn-sm" id="btn-reset-all-security">
+                       ${escapeHtml(sp.resetDefaultsBtn)}
+                     </button>`
+                  : ""
+              }
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-status-refresh">
+                ⟳ ${escapeHtml(sp.refreshStatusBtn)}
+              </button>
+            </div>
           </div>
-          <div class="subtext">
-            ${escapeHtml(allActive ? sp.allProtectionsDesc : sp.customProtectionDesc)}
-          </div>
-        </div>
-      </div>
-      <div class="btn-group-sm">
-        ${
-          !allActive
-            ? `<button type="button" class="btn btn-primary" id="btn-reset-all-security">
-                 ${escapeHtml(sp.resetDefaultsBtn)}
-               </button>`
-            : ""
-        }
-        <button type="button" class="btn btn-secondary" id="btn-status-refresh">
-          ⟳ ${escapeHtml(sp.refreshStatusBtn)}
-        </button>
-      </div>
-    </div>
 
-    <!-- Live Subsystem Health Grid -->
-    <div class="slots-section">
-      <div class="section-title-sm">${escapeHtml(sp.subsystemSectionTitle)}</div>
-      <div class="subsystem-grid">
-        <div class="surf-card subsystem-card">
-          <div class="subsystem-card-top">
-            <span class="subsystem-card-label">${escapeHtml(sp.vpnAdapterCardTitle)}</span>
-            <span class="status-dot ${isSurfConnected ? "dot-online" : "dot-offline"}"></span>
+          <!-- Live Subsystem Health Section -->
+          <div class="security-subsystems-section">
+            <div class="section-title-sm" style="margin-bottom: 4px;">${escapeHtml(sp.subsystemSectionTitle)}</div>
+            <div class="subsystem-grid">
+              <div class="surf-card subsystem-card">
+                <div class="subsystem-card-top">
+                  <span class="subsystem-card-label">${escapeHtml(sp.vpnAdapterCardTitle)}</span>
+                  <span class="status-dot ${isSurfConnected ? "dot-online" : "dot-offline"}"></span>
+                </div>
+                <div class="subsystem-card-value mono">
+                  ${isSurfConnected ? escapeHtml(surf?.ipv4 || "") : escapeHtml(strings.header.disconnected)}
+                </div>
+                <div class="subtext-sm">
+                  ${escapeHtml(surf?.description || "Surfshark Wintun / utun / OpenVPN")}
+                </div>
+              </div>
+
+              <div class="surf-card subsystem-card">
+                <div class="subsystem-card-top">
+                  <span class="subsystem-card-label">${escapeHtml(sp.ispGuardCardTitle)}</span>
+                  <span class="status-dot ${snap.hostIspIp ? "dot-online" : "dot-warning"}"></span>
+                </div>
+                <div class="subsystem-card-value mono">
+                  ${escapeHtml(snap.hostIspIp || "Detecting...")}
+                </div>
+                <div class="subtext-sm">
+                  ${s.ispIpGuard ? escapeHtml(sp.stateOn) : escapeHtml(sp.stateOff)}
+                </div>
+              </div>
+
+              <div class="surf-card subsystem-card">
+                <div class="subsystem-card-top">
+                  <span class="subsystem-card-label">${escapeHtml(sp.wireguardEngineCardTitle)}</span>
+                  <span class="status-dot ${s.wireproxyReady && s.hasWgPrivateKey ? "dot-online" : "dot-warning"}"></span>
+                </div>
+                <div class="subsystem-card-value">
+                  ${s.wireproxyReady ? escapeHtml(strings.header.ready) : escapeHtml(strings.header.missing)}
+                </div>
+                <div class="subtext-sm">
+                  ${escapeHtml(s.hasWgPrivateKey ? sp.keyConfigured : sp.keyNotSet)}
+                </div>
+              </div>
+
+              <div class="surf-card subsystem-card">
+                <div class="subsystem-card-top">
+                  <span class="subsystem-card-label">${escapeHtml(sp.proxyHubCardTitle)}</span>
+                  <span class="status-dot ${runningSlots > 0 ? "dot-online" : "dot-warning"}"></span>
+                </div>
+                <div class="subsystem-card-value">
+                  ${escapeHtml(
+                    sp.activeSlotsCount
+                      .replace("{running}", String(runningSlots))
+                      .replace("{total}", String(snap.slots.length))
+                  )}
+                </div>
+                <div class="subtext-sm mono">
+                  ${s.allowLan ? "0.0.0.0" : "127.0.0.1"}:${s.basePort}+
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="subsystem-card-value mono">
-            ${isSurfConnected ? escapeHtml(surf?.ipv4 || "") : escapeHtml(strings.header.disconnected)}
-          </div>
-          <div class="subtext-sm">
-            ${escapeHtml(surf?.description || "Surfshark Wintun / utun / OpenVPN")}
+
+          <!-- Architecture Defense Standards Summary Card -->
+          <div class="surf-card security-summary-card">
+            <div class="security-summary-title">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#168A9E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              <span>${currentLanguage === "vi" ? "Kiến trúc An toàn & Cô lập" : "Security Architecture & Standards"}</span>
+            </div>
+            <div class="security-summary-list">
+              <div class="security-summary-item">
+                <span class="summary-dot">✔</span>
+                <div class="summary-item-text">
+                  <strong>${currentLanguage === "vi" ? "Khóa Socket Outbound:" : "Outbound Socket Lock:"}</strong>
+                  <span>${currentLanguage === "vi" ? "Ràng buộc IP_UNICAST_IF (Windows) / IP_BOUND_IF (macOS) chặn rò rỉ khi rớt tunnel." : "Strict socket binding blocks leaks when tunnel drops."}</span>
+                </div>
+              </div>
+              <div class="security-summary-item">
+                <span class="summary-dot">✔</span>
+                <div class="summary-item-text">
+                  <strong>${currentLanguage === "vi" ? "Phân giải DNS Kín:" : "Tunnel DNS Resolution:"}</strong>
+                  <span>${currentLanguage === "vi" ? "RFC 1035 UDP 53 đi hoàn toàn trong lòng VPN, cô lập khỏi DNS ISP." : "RFC 1035 DNS routed strictly inside VPN, bypassing ISP DNS."}</span>
+                </div>
+              </div>
+              <div class="security-summary-item">
+                <span class="summary-dot">✔</span>
+                <div class="summary-item-text">
+                  <strong>${currentLanguage === "vi" ? "Chống Impossible Travel:" : "Impossible Travel Guard:"}</strong>
+                  <span>${currentLanguage === "vi" ? "Cụm vi địa lý < 850 km, ưu tiên đổi cùng thành phố để tránh bị nền tảng gắn cờ." : "Micro-cluster separation (< 850 km) prevents anomalous geo jump detection."}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="surf-card subsystem-card">
-          <div class="subsystem-card-top">
-            <span class="subsystem-card-label">${escapeHtml(sp.ispGuardCardTitle)}</span>
-            <span class="status-dot ${snap.hostIspIp ? "dot-online" : "dot-warning"}"></span>
+        <!-- Right Column: Interactive Security Protections -->
+        <div class="security-col-right">
+          <div class="security-col-header">
+            <h2 class="section-title" style="margin-bottom: 4px;">${escapeHtml(sp.protectionsSectionTitle)}</h2>
+            <div class="subtext" style="margin-bottom: 12px;">${escapeHtml(sp.subtitle)}</div>
           </div>
-          <div class="subsystem-card-value mono">
-            ${escapeHtml(snap.hostIspIp || "Detecting...")}
-          </div>
-          <div class="subtext-sm">
-            ${s.ispIpGuard ? escapeHtml(sp.stateOn) : escapeHtml(sp.stateOff)}
+          <div class="security-toggles-list">
+            ${featureCardsHtml}
           </div>
         </div>
-
-        <div class="surf-card subsystem-card">
-          <div class="subsystem-card-top">
-            <span class="subsystem-card-label">${escapeHtml(sp.wireguardEngineCardTitle)}</span>
-            <span class="status-dot ${s.wireproxyReady && s.hasWgPrivateKey ? "dot-online" : "dot-warning"}"></span>
-          </div>
-          <div class="subsystem-card-value">
-            ${s.wireproxyReady ? escapeHtml(strings.header.ready) : escapeHtml(strings.header.missing)}
-          </div>
-          <div class="subtext-sm">
-            ${escapeHtml(s.hasWgPrivateKey ? sp.keyConfigured : sp.keyNotSet)}
-          </div>
-        </div>
-
-        <div class="surf-card subsystem-card">
-          <div class="subsystem-card-top">
-            <span class="subsystem-card-label">${escapeHtml(sp.proxyHubCardTitle)}</span>
-            <span class="status-dot ${runningSlots > 0 ? "dot-online" : "dot-warning"}"></span>
-          </div>
-          <div class="subsystem-card-value">
-            ${escapeHtml(
-              sp.activeSlotsCount
-                .replace("{running}", String(runningSlots))
-                .replace("{total}", String(snap.slots.length))
-            )}
-          </div>
-          <div class="subtext-sm mono">
-            ${s.allowLan ? "0.0.0.0" : "127.0.0.1"}:${s.basePort}+
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Interactive Security Toggles Grid -->
-    <div class="slots-section">
-      <h2 class="section-title" style="margin-bottom: 4px;">${escapeHtml(sp.protectionsSectionTitle)}</h2>
-      <div class="subtext" style="margin-bottom: 10px;">${escapeHtml(sp.subtitle)}</div>
-      <div class="security-grid">
-        ${featureCardsHtml}
       </div>
     </div>
   `;
