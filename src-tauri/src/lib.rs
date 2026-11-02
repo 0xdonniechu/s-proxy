@@ -1476,6 +1476,57 @@ pub fn run() {
                     .spawn();
             }
             setup_tray(handle, Arc::clone(&hub_for_setup))?;
+
+            // Server 24/7 Boot Auto-Start & Wireproxy Watchdog Auto-Heal
+            let hub_for_daemon = Arc::clone(&hub_for_setup);
+            tauri::async_runtime::spawn(async move {
+                // 1. On startup, auto-start all slots that have `auto_start = true`
+                let auto_ids: Vec<String> = {
+                    if let Ok(guard) = hub_for_daemon.lock() {
+                        guard
+                            .persisted
+                            .slots
+                            .iter()
+                            .filter(|s| s.auto_start)
+                            .map(|s| s.id.clone())
+                            .collect()
+                    } else {
+                        Vec::new()
+                    }
+                };
+                for sid in auto_ids {
+                    let _ = start_slot_internal(&hub_for_daemon, &sid).await;
+                }
+
+                // 2. 24/7 Server Watchdog: every 12 seconds, check if any running wireproxy child exited unexpectedly and auto-heal it
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(12)).await;
+                    let crashed_ids: Vec<String> = {
+                        if let Ok(mut guard) = hub_for_daemon.lock() {
+                            guard
+                                .runtimes
+                                .iter_mut()
+                                .filter_map(|(sid, rt)| {
+                                    if rt.status == SlotRuntimeStatus::Running {
+                                        if let Some(ref mut wg) = rt.wg_handle {
+                                            if !wg.is_alive() {
+                                                return Some(sid.clone());
+                                            }
+                                        }
+                                    }
+                                    None
+                                })
+                                .collect()
+                        } else {
+                            Vec::new()
+                        }
+                    };
+                    for sid in crashed_ids {
+                        let _ = start_slot_internal(&hub_for_daemon, &sid).await;
+                    }
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
