@@ -15,16 +15,159 @@ import type {
   VpnProvider,
 } from "./types";
 
+const ORDERED_TZ_GROUPS = [
+  "asia_utc7",
+  "asia_utc8",
+  "asia_utc9",
+  "us_east",
+  "us_central",
+  "us_mountain",
+  "us_west",
+  "eu_west",
+  "eu_central",
+  "au_east",
+  "custom",
+] as const;
+
+function detectSystemTimezoneInfo(): {
+  tzGroup: string;
+  ianaTimezone: string;
+  utcOffsetLabel: string;
+} {
+  let iana = "";
+  try {
+    iana = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    iana = "";
+  }
+  const offsetMinutes = -new Date().getTimezoneOffset();
+  const offsetHours = Math.round(offsetMinutes / 60);
+  const sign = offsetHours >= 0 ? "+" : "";
+  const utcOffsetLabel = `UTC${sign}${offsetHours}`;
+  const ianaLower = iana.toLowerCase();
+
+  if (
+    ianaLower.includes("ho_chi_minh") ||
+    ianaLower.includes("saigon") ||
+    ianaLower.includes("bangkok") ||
+    ianaLower.includes("jakarta") ||
+    ianaLower.includes("phnom_penh") ||
+    ianaLower.includes("vientiane") ||
+    ianaLower.includes("pontianak")
+  ) {
+    return { tzGroup: "asia_utc7", ianaTimezone: iana || "Asia/Ho_Chi_Minh", utcOffsetLabel };
+  }
+  if (
+    ianaLower.includes("singapore") ||
+    ianaLower.includes("hong_kong") ||
+    ianaLower.includes("taipei") ||
+    ianaLower.includes("kuala_lumpur") ||
+    ianaLower.includes("manila") ||
+    ianaLower.includes("makassar") ||
+    ianaLower.includes("shanghai") ||
+    ianaLower.includes("perth")
+  ) {
+    return { tzGroup: "asia_utc8", ianaTimezone: iana || "Asia/Singapore", utcOffsetLabel };
+  }
+  if (ianaLower.includes("tokyo") || ianaLower.includes("seoul") || ianaLower.includes("jayapura")) {
+    return { tzGroup: "asia_utc9", ianaTimezone: iana || "Asia/Tokyo", utcOffsetLabel };
+  }
+  if (
+    ianaLower.includes("sydney") ||
+    ianaLower.includes("melbourne") ||
+    ianaLower.includes("brisbane") ||
+    ianaLower.includes("hobart") ||
+    ianaLower.includes("canberra")
+  ) {
+    return { tzGroup: "au_east", ianaTimezone: iana || "Australia/Sydney", utcOffsetLabel };
+  }
+  if (
+    ianaLower === "utc" ||
+    ianaLower === "etc/utc" ||
+    ianaLower === "etc/gmt" ||
+    ianaLower.includes("europe/london") ||
+    ianaLower.includes("europe/dublin") ||
+    ianaLower.includes("europe/lisbon")
+  ) {
+    return { tzGroup: "eu_west", ianaTimezone: iana || "Europe/London", utcOffsetLabel };
+  }
+  if (ianaLower.startsWith("europe/")) {
+    return { tzGroup: "eu_central", ianaTimezone: iana || "Europe/Berlin", utcOffsetLabel };
+  }
+  if (
+    ianaLower.includes("america/new_york") ||
+    ianaLower.includes("america/toronto") ||
+    ianaLower.includes("america/montreal") ||
+    ianaLower.includes("america/detroit") ||
+    ianaLower.includes("america/indiana") ||
+    ianaLower.includes("america/kentucky")
+  ) {
+    return { tzGroup: "us_east", ianaTimezone: iana || "America/New_York", utcOffsetLabel };
+  }
+  if (
+    ianaLower.includes("america/chicago") ||
+    ianaLower.includes("america/winnipeg") ||
+    ianaLower.includes("america/mexico_city") ||
+    ianaLower.includes("america/menominee")
+  ) {
+    return { tzGroup: "us_central", ianaTimezone: iana || "America/Chicago", utcOffsetLabel };
+  }
+  if (
+    ianaLower.includes("america/denver") ||
+    ianaLower.includes("america/phoenix") ||
+    ianaLower.includes("america/edmonton") ||
+    ianaLower.includes("america/boise")
+  ) {
+    return { tzGroup: "us_mountain", ianaTimezone: iana || "America/Denver", utcOffsetLabel };
+  }
+  if (
+    ianaLower.includes("america/los_angeles") ||
+    ianaLower.includes("america/vancouver") ||
+    ianaLower.includes("america/tijuana")
+  ) {
+    return { tzGroup: "us_west", ianaTimezone: iana || "America/Los_Angeles", utcOffsetLabel };
+  }
+
+  switch (offsetHours) {
+    case 7:
+      return { tzGroup: "asia_utc7", ianaTimezone: iana || "Asia/Ho_Chi_Minh", utcOffsetLabel };
+    case 8:
+      return { tzGroup: "asia_utc8", ianaTimezone: iana || "Asia/Singapore", utcOffsetLabel };
+    case 9:
+      return { tzGroup: "asia_utc9", ianaTimezone: iana || "Asia/Tokyo", utcOffsetLabel };
+    case 10:
+    case 11:
+      return { tzGroup: "au_east", ianaTimezone: iana || "Australia/Sydney", utcOffsetLabel };
+    case 0:
+      return { tzGroup: "eu_west", ianaTimezone: iana || "Europe/London", utcOffsetLabel };
+    case 1:
+    case 2:
+      return { tzGroup: "eu_central", ianaTimezone: iana || "Europe/Berlin", utcOffsetLabel };
+    case -5:
+    case -4:
+      return { tzGroup: "us_east", ianaTimezone: iana || "America/New_York", utcOffsetLabel };
+    case -6:
+      return { tzGroup: "us_central", ianaTimezone: iana || "America/Chicago", utcOffsetLabel };
+    case -7:
+      return { tzGroup: "us_mountain", ianaTimezone: iana || "America/Denver", utcOffsetLabel };
+    case -8:
+      return { tzGroup: "us_west", ianaTimezone: iana || "America/Los_Angeles", utcOffsetLabel };
+    default:
+      return { tzGroup: "asia_utc7", ianaTimezone: iana || "Asia/Ho_Chi_Minh", utcOffsetLabel };
+  }
+}
+
 // State
 let snapshot: HubSnapshot | null = null;
 let currentLanguage: AppLanguage = "en";
 let activeTab: "hub" | "status" | "catalog" | "providers" | "gologin" | "settings" = "hub";
 
-// Catalog filter state
+// Catalog filter state (defaults to host machine's current timezone)
 let catalogSearchQuery = "";
 let catalogFilterType: "all" | "generic" | "static" = "all";
 let catalogProviderFilter: "all" | VpnProvider = "all";
-let catalogTzFilter: string = "all";
+let catalogTzFilter: string = detectSystemTimezoneInfo().tzGroup;
+let modalMultiTzFilter: string = detectSystemTimezoneInfo().tzGroup;
 
 // GoLogin assignment selection state: profileId -> slotId
 const gologinSlotSelection: Record<string, string> = {};
@@ -877,7 +1020,50 @@ function renderHubTab(snap: HubSnapshot): string {
     })
     .join("");
 
-  const multiServerOptions = renderGroupedLocationOptions(snap.locations);
+  const sysTzInfo = detectSystemTimezoneInfo();
+  const modalTzCounts = new Map<string, number>();
+  for (const loc of snap.locations) {
+    const g = loc.tzGroup || "custom";
+    modalTzCounts.set(g, (modalTzCounts.get(g) || 0) + 1);
+  }
+  const availableModalTzGroups = ORDERED_TZ_GROUPS.filter(
+    (g) => (modalTzCounts.get(g) || 0) > 0 || g === sysTzInfo.tzGroup
+  );
+  const effectiveModalTz =
+    modalMultiTzFilter === "all" || modalTzCounts.has(modalMultiTzFilter)
+      ? modalMultiTzFilter
+      : modalTzCounts.has(sysTzInfo.tzGroup)
+        ? sysTzInfo.tzGroup
+        : availableModalTzGroups[0] || "all";
+
+  const modalFilteredLocations =
+    effectiveModalTz === "all"
+      ? snap.locations
+      : snap.locations.filter((l) => (l.tzGroup || "custom") === effectiveModalTz);
+  const multiServerOptions = renderGroupedLocationOptions(modalFilteredLocations);
+
+  const modalTzOptionsHtml = [
+    ...availableModalTzGroups.map((g) => {
+      const info = getTimezoneGroupInfo(g);
+      const count = modalTzCounts.get(g) || 0;
+      const sysTag =
+        g === sysTzInfo.tzGroup
+          ? currentLanguage === "vi"
+            ? " ★ Múi giờ máy đang dùng"
+            : " ★ System Timezone"
+          : "";
+      return `<option value="${escapeHtml(g)}" ${effectiveModalTz === g ? "selected" : ""}>
+        ${escapeHtml(`${info.groupLabel} (${count} proxy)${sysTag}`)}
+      </option>`;
+    }),
+    `<option value="all" ${effectiveModalTz === "all" ? "selected" : ""}>
+      ${escapeHtml(
+        currentLanguage === "vi"
+          ? `🌐 Tất cả Múi giờ (${snap.locations.length} proxy)`
+          : `🌐 All Timezones (${snap.locations.length} proxies)`
+      )}
+    </option>`,
+  ].join("");
 
   const modalHtml = isCreateBridgeModalOpen
     ? `
@@ -923,7 +1109,13 @@ function renderHubTab(snap: HubSnapshot): string {
           <h3>${escapeHtml(strings.hub.modalCreateMultiTitle)}</h3>
           <form id="create-multi-form">
             <div class="form-group">
-              <label for="multi-slot-location">${escapeHtml(strings.hub.selectServerLabel)}</label>
+              <label for="multi-slot-tz">${escapeHtml(currentLanguage === "vi" ? "1. Chọn Múi giờ (Mặc định theo máy đang dùng)" : "1. Select Timezone (Defaults to System Timezone)")}</label>
+              <select id="multi-slot-tz" class="select-input">
+                ${modalTzOptionsHtml}
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="multi-slot-location">${escapeHtml(currentLanguage === "vi" ? `2. Chọn Proxy trong múi giờ (${modalFilteredLocations.length} máy chủ khả dụng)` : `2. Select Proxy in Timezone (${modalFilteredLocations.length} available)`)}</label>
               <select id="multi-slot-location" class="select-input" required>
                 ${multiServerOptions}
               </select>
@@ -1268,6 +1460,33 @@ function renderStatusTab(snap: HubSnapshot): string {
 // 3. View 2: Locations Tab (Multi-Provider Catalog)
 function renderCatalogTab(snap: HubSnapshot): string {
   const strings = getStrings();
+  const sysTzInfo = detectSystemTimezoneInfo();
+
+  // Available timezone groups for the active provider filter
+  const tzCounts = new Map<string, number>();
+  let totalForProvider = 0;
+  for (const loc of snap.locations) {
+    if (catalogProviderFilter !== "all" && loc.provider !== catalogProviderFilter) continue;
+    const g = loc.tzGroup || "custom";
+    tzCounts.set(g, (tzCounts.get(g) || 0) + 1);
+    totalForProvider += 1;
+  }
+
+  // Put host machine's timezone group first in the dropdown list, followed by other available groups
+  const availableTzGroups = ORDERED_TZ_GROUPS.filter(
+    (g) => (tzCounts.get(g) || 0) > 0 || g === sysTzInfo.tzGroup
+  );
+  const orderedTzGroups = [
+    ...availableTzGroups.filter((g) => g === sysTzInfo.tzGroup),
+    ...availableTzGroups.filter((g) => g !== sysTzInfo.tzGroup),
+  ];
+
+  const effectiveTzFilter =
+    catalogTzFilter === "all" || tzCounts.has(catalogTzFilter) || catalogTzFilter === sysTzInfo.tzGroup
+      ? catalogTzFilter
+      : tzCounts.has(sysTzInfo.tzGroup)
+        ? sysTzInfo.tzGroup
+        : orderedTzGroups[0] || "all";
 
   const query = catalogSearchQuery.trim().toLowerCase();
   const filtered = snap.locations.filter((loc: SurfsharkLocation) => {
@@ -1277,7 +1496,7 @@ function renderCatalogTab(snap: HubSnapshot): string {
     if (catalogFilterType !== "all" && loc.locationType !== catalogFilterType) {
       return false;
     }
-    if (catalogTzFilter !== "all" && (loc.tzGroup || "custom") !== catalogTzFilter) {
+    if (effectiveTzFilter !== "all" && (loc.tzGroup || "custom") !== effectiveTzFilter) {
       return false;
     }
     if (!query) return true;
@@ -1291,80 +1510,44 @@ function renderCatalogTab(snap: HubSnapshot): string {
     );
   });
 
-  // Available timezone groups for filter pills
-  const tzCounts = new Map<string, number>();
-  for (const loc of snap.locations) {
-    if (catalogProviderFilter !== "all" && loc.provider !== catalogProviderFilter) continue;
-    const g = loc.tzGroup || "custom";
-    tzCounts.set(g, (tzCounts.get(g) || 0) + 1);
-  }
-  const orderedTzGroups = [
-    "asia_utc7",
-    "asia_utc8",
-    "asia_utc9",
-    "us_east",
-    "us_central",
-    "us_mountain",
-    "us_west",
-    "eu_west",
-    "eu_central",
-    "au_east",
-    "custom",
-  ].filter((g) => (tzCounts.get(g) || 0) > 0);
-
-  const tzFilterPillsHtml = [
-    {
-      id: "all",
-      label:
-        currentLanguage === "vi"
-          ? `🕒 Tất cả Múi giờ (${snap.locations.length})`
-          : `🕒 All Timezones (${snap.locations.length})`,
-    },
+  const tzSelectOptionsHtml = [
     ...orderedTzGroups.map((g) => {
       const info = getTimezoneGroupInfo(g);
-      return {
-        id: g,
-        label: `${info.shortPill} (${tzCounts.get(g) || 0})`,
-      };
+      const count = tzCounts.get(g) || 0;
+      const isSystemTz = g === sysTzInfo.tzGroup;
+      const sysSuffix = isSystemTz
+        ? currentLanguage === "vi"
+          ? " ★ Múi giờ máy đang dùng (Mặc định)"
+          : " ★ System Timezone (Default)"
+        : "";
+      return `<option value="${escapeHtml(g)}" ${effectiveTzFilter === g ? "selected" : ""}>
+        ${escapeHtml(`${info.groupLabel} — ${count} proxy${sysSuffix}`)}
+      </option>`;
     }),
-  ]
-    .map(
-      (tz) => `
-      <button type="button" class="pill-tab catalog-tz-tab ${catalogTzFilter === tz.id ? "active" : ""}" data-tz="${escapeHtml(tz.id)}">
-        ${escapeHtml(tz.label)}
-      </button>
-    `
-    )
-    .join("");
+    `<option value="all" ${effectiveTzFilter === "all" ? "selected" : ""}>
+      ${escapeHtml(
+        currentLanguage === "vi"
+          ? `🌐 Hiển thị tất cả múi giờ (${totalForProvider} proxy)`
+          : `🌐 Show All Timezones (${totalForProvider} proxies)`
+      )}
+    </option>`,
+  ].join("");
 
-  // Recommended for you: Best Same-Timezone (UTC+7) & Lowest-load APAC Cable Hub (UTC+8)
-  let fastestLoc: SurfsharkLocation | null = null;
-  let nearestLoc: SurfsharkLocation | null = null;
+  const sysTzGroupMeta = getTimezoneGroupInfo(sysTzInfo.tzGroup);
+  const isUsingSystemTz = effectiveTzFilter === sysTzInfo.tzGroup;
 
-  const poolForRec =
-    catalogProviderFilter === "all"
-      ? snap.locations
-      : snap.locations.filter((l) => l.provider === catalogProviderFilter);
+  // Recommended top 2 lowest-load servers within the currently selected timezone
+  let primaryRecLoc: SurfsharkLocation | null = null;
+  let backupRecLoc: SurfsharkLocation | null = null;
 
-  if (poolForRec.length > 0) {
-    const utc7Pool = poolForRec
-      .filter((l) => ["VN", "TH", "ID", "KH", "LA"].includes(l.countryCode.toUpperCase()))
-      .sort((a, b) => a.load - b.load);
-    const utc8HubPool = poolForRec
-      .filter(
-        (l) =>
-          ["SG", "HK", "TW", "MY", "PH"].includes(l.countryCode.toUpperCase()) &&
-          l.locationType === "generic"
-      )
-      .sort((a, b) => a.load - b.load);
-    const sortedByLoad = [...poolForRec].sort((a, b) => a.load - b.load);
-
-    nearestLoc = utc7Pool.find((l) => l.countryCode.toUpperCase() === "VN") || utc7Pool[0] || sortedByLoad[0] || null;
-    fastestLoc =
-      utc8HubPool.find((l) => l.countryCode.toUpperCase() === "SG") ||
-      utc8HubPool[0] ||
-      sortedByLoad.find((l) => l.id !== nearestLoc?.id) ||
-      nearestLoc;
+  if (filtered.length > 0) {
+    const sortedByLoad = [...filtered].sort((a, b) => a.load - b.load);
+    primaryRecLoc =
+      effectiveTzFilter === "asia_utc7"
+        ? sortedByLoad.find((l) => l.countryCode.toUpperCase() === "VN" && l.load <= 35) ||
+          sortedByLoad[0]
+        : sortedByLoad[0];
+    backupRecLoc = sortedByLoad.find((l) => l.id !== primaryRecLoc?.id) || null;
   }
 
   const providerTabsHtml = [
@@ -1454,6 +1637,15 @@ function renderCatalogTab(snap: HubSnapshot): string {
     }
   }
 
+  const primaryRecTitle =
+    currentLanguage === "vi"
+      ? "Máy chủ tối ưu nhất trong múi giờ đang chọn (#1)"
+      : "Best Server in Selected Timezone (#1)";
+  const backupRecTitle =
+    currentLanguage === "vi"
+      ? "Máy chủ dự phòng tải thấp cùng múi giờ (#2)"
+      : "Best Same-Timezone Failover Node (#2)";
+
   return `
     <!-- Multi-Provider Filter Bar -->
     <div class="provider-filter-bar">
@@ -1462,10 +1654,31 @@ function renderCatalogTab(snap: HubSnapshot): string {
       </div>
     </div>
 
-    <!-- Timezone Classification Filter Bar -->
-    <div class="provider-filter-bar" style="margin-top: -4px;">
-      <div class="pill-tabs" role="tablist" style="flex-wrap: wrap;">
-        ${tzFilterPillsHtml}
+    <!-- Timezone Dropdown Selector Card (Defaults to Host System Timezone) -->
+    <div class="surf-card tz-dropdown-bar">
+      <div class="tz-dropdown-left">
+        <label for="catalog-tz-select" class="tz-dropdown-label">
+          🕒 ${escapeHtml(currentLanguage === "vi" ? "Chọn Múi Giờ Proxy:" : "Select Proxy Timezone:")}
+        </label>
+        <div class="subtext-sm">
+          ${escapeHtml(
+            currentLanguage === "vi"
+              ? `Mặc định hiển thị theo múi giờ máy đang dùng (${sysTzGroupMeta.tzBadge})`
+              : `Defaults to your computer's current timezone (${sysTzGroupMeta.tzBadge})`
+          )}
+        </div>
+      </div>
+      <div class="tz-dropdown-controls">
+        <select id="catalog-tz-select" class="select-input catalog-tz-select">
+          ${tzSelectOptionsHtml}
+        </select>
+        ${
+          !isUsingSystemTz
+            ? `<button type="button" class="btn btn-secondary btn-sm" id="btn-reset-system-tz" title="${escapeHtml(sysTzGroupMeta.groupLabel)}">
+                 ↺ ${escapeHtml(currentLanguage === "vi" ? `Về múi giờ máy (${sysTzInfo.utcOffsetLabel})` : `System Timezone (${sysTzInfo.utcOffsetLabel})`)}
+               </button>`
+            : `<span class="badge badge-running mono">🖥 ${escapeHtml(currentLanguage === "vi" ? `Múi giờ máy (${sysTzInfo.utcOffsetLabel})` : `System TZ (${sysTzInfo.utcOffsetLabel})`)}</span>`
+        }
       </div>
     </div>
 
@@ -1498,46 +1711,47 @@ function renderCatalogTab(snap: HubSnapshot): string {
       </div>
 
       <div class="catalog-count-badge">
-        ${escapeHtml(strings.catalog.serverCount.replace("{count}", String(filtered.length)))}
+        ${escapeHtml(
+          currentLanguage === "vi"
+            ? `Đang có ${filtered.length} proxy khả dụng trong múi giờ này`
+            : `Showing ${filtered.length} available proxies in selected timezone`
+        )}
       </div>
     </div>
 
-    <!-- Recommended for you Section -->
+    <!-- Recommended for you in Selected Timezone -->
+    ${
+      primaryRecLoc
+        ? `
     <div class="recommended-section">
       <div class="section-title-sm">${escapeHtml(strings.catalog.recommendedTitle)}</div>
       <div class="recommended-grid">
+        <div class="surf-card rec-card">
+          <div class="rec-header">
+            <div class="dark-icon-badge">📍</div>
+            <div class="rec-meta">
+              <span class="rec-title">${escapeHtml(primaryRecTitle)}</span>
+              <span class="rec-location">${renderFlagBadge(primaryRecLoc.countryCode)} <strong>${escapeHtml(primaryRecLoc.country)}</strong> &bull; ${escapeHtml(primaryRecLoc.location)}</span>
+            </div>
+            <div class="rec-load-badge">${primaryRecLoc.load}% load</div>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm btn-create-location-slot" data-loc-id="${escapeHtml(primaryRecLoc.id)}" data-loc-label="${escapeHtml(`${primaryRecLoc.countryCode} • ${primaryRecLoc.country} - ${primaryRecLoc.location}`)}">
+            ${escapeHtml(strings.catalog.createAndStart)}
+          </button>
+        </div>
         ${
-          fastestLoc
+          backupRecLoc
             ? `
           <div class="surf-card rec-card">
             <div class="rec-header">
               <div class="dark-icon-badge">⚡</div>
               <div class="rec-meta">
-                <span class="rec-title">${escapeHtml(strings.catalog.fastestLocation)}</span>
-                <span class="rec-location">${renderFlagBadge(fastestLoc.countryCode)} <strong>${escapeHtml(fastestLoc.country)}</strong> &bull; ${escapeHtml(fastestLoc.location)}</span>
+                <span class="rec-title">${escapeHtml(backupRecTitle)}</span>
+                <span class="rec-location">${renderFlagBadge(backupRecLoc.countryCode)} <strong>${escapeHtml(backupRecLoc.country)}</strong> &bull; ${escapeHtml(backupRecLoc.location)}</span>
               </div>
-              <div class="rec-load-badge">${fastestLoc.load}% load</div>
+              <div class="rec-load-badge">${backupRecLoc.load}% load</div>
             </div>
-            <button type="button" class="btn btn-primary btn-sm btn-create-location-slot" data-loc-id="${escapeHtml(fastestLoc.id)}" data-loc-label="${escapeHtml(`${fastestLoc.countryCode} • ${fastestLoc.country} - ${fastestLoc.location}`)}">
-              ${escapeHtml(strings.catalog.createAndStart)}
-            </button>
-          </div>
-        `
-            : ""
-        }
-        ${
-          nearestLoc
-            ? `
-          <div class="surf-card rec-card">
-            <div class="rec-header">
-              <div class="dark-icon-badge">📍</div>
-              <div class="rec-meta">
-                <span class="rec-title">${escapeHtml(strings.catalog.nearestCountry)}</span>
-                <span class="rec-location">${renderFlagBadge(nearestLoc.countryCode)} <strong>${escapeHtml(nearestLoc.country)}</strong> &bull; ${escapeHtml(nearestLoc.location)}</span>
-              </div>
-              <div class="rec-load-badge">${nearestLoc.load}% load</div>
-            </div>
-            <button type="button" class="btn btn-primary btn-sm btn-create-location-slot" data-loc-id="${escapeHtml(nearestLoc.id)}" data-loc-label="${escapeHtml(`${nearestLoc.countryCode} • ${nearestLoc.country} - ${nearestLoc.location}`)}">
+            <button type="button" class="btn btn-primary btn-sm btn-create-location-slot" data-loc-id="${escapeHtml(backupRecLoc.id)}" data-loc-label="${escapeHtml(`${backupRecLoc.countryCode} • ${backupRecLoc.country} - ${backupRecLoc.location}`)}">
               ${escapeHtml(strings.catalog.createAndStart)}
             </button>
           </div>
@@ -1546,6 +1760,9 @@ function renderCatalogTab(snap: HubSnapshot): string {
         }
       </div>
     </div>
+    `
+        : ""
+    }
 
     <!-- Grouped By Exact Timezone Sections -->
     ${groupedSectionsHtml}
@@ -2088,8 +2305,20 @@ function attachEventListeners(): void {
   const btnOpenCreateMulti = document.getElementById("btn-open-create-multi");
   if (btnOpenCreateMulti) {
     btnOpenCreateMulti.addEventListener("click", () => {
+      modalMultiTzFilter =
+        catalogTzFilter && catalogTzFilter !== "all"
+          ? catalogTzFilter
+          : detectSystemTimezoneInfo().tzGroup;
       isCreateMultiModalOpen = true;
       isCreateBridgeModalOpen = false;
+      render();
+    });
+  }
+
+  const multiSlotTzSelect = document.getElementById("multi-slot-tz") as HTMLSelectElement | null;
+  if (multiSlotTzSelect) {
+    multiSlotTzSelect.addEventListener("change", () => {
+      modalMultiTzFilter = multiSlotTzSelect.value;
       render();
     });
   }
@@ -2281,16 +2510,23 @@ function attachEventListeners(): void {
     });
   });
 
-  // Catalog timezone group filter pill tabs
-  document.querySelectorAll<HTMLButtonElement>(".catalog-tz-tab").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const tz = btn.getAttribute("data-tz");
-      if (tz) {
-        catalogTzFilter = tz;
-        render();
-      }
+  // Catalog timezone dropdown selector
+  const catalogTzSelect = document.getElementById("catalog-tz-select") as HTMLSelectElement | null;
+  if (catalogTzSelect) {
+    catalogTzSelect.addEventListener("change", () => {
+      catalogTzFilter = catalogTzSelect.value;
+      render();
     });
-  });
+  }
+
+  // Quick reset to host machine's default timezone
+  const btnResetSystemTz = document.getElementById("btn-reset-system-tz");
+  if (btnResetSystemTz) {
+    btnResetSystemTz.addEventListener("click", () => {
+      catalogTzFilter = detectSystemTimezoneInfo().tzGroup;
+      render();
+    });
+  }
 
   // Providers tab actions
   document.querySelectorAll<HTMLButtonElement>(".btn-browse-provider").forEach((btn) => {
