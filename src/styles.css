@@ -266,13 +266,13 @@ body {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* Dark Surfshark Icon Badges */
+/* Hub Provider Icon Badges */
 .dark-icon-badge {
   width: 44px;
   height: 32px;
   border-radius: 9px;
-  background-color: #151922;
-  color: #FFFFFF;
+  background-color: #FFFFFF;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -280,32 +280,32 @@ body {
   font-weight: 700;
   flex-shrink: 0;
   letter-spacing: 0.02em;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
 
 .dark-icon-badge.prov-surfshark {
-  background: linear-gradient(135deg, #168A9E 0%, #0E6C7D 100%);
-  color: #FFFFFF;
+  background: #F0FAF9;
+  border-color: rgba(30, 191, 191, 0.28);
 }
 
 .dark-icon-badge.prov-nordvpn {
-  background: linear-gradient(135deg, #4687FF 0%, #1F5CE0 100%);
-  color: #FFFFFF;
+  background: #F2F5FF;
+  border-color: rgba(62, 95, 255, 0.24);
 }
 
 .dark-icon-badge.prov-mullvad {
-  background: linear-gradient(135deg, #24405E 0%, #14253A 100%);
-  color: #FFC400;
+  background: #F4F6F8;
+  border-color: rgba(25, 46, 69, 0.22);
 }
 
 .dark-icon-badge.prov-protonvpn {
-  background: linear-gradient(135deg, #7C5CFC 0%, #5833E0 100%);
-  color: #FFFFFF;
+  background: #F6F3FF;
+  border-color: rgba(109, 74, 255, 0.24);
 }
 
 .dark-icon-badge.prov-custom {
-  background: linear-gradient(135deg, #88171A 0%, #50080B 100%);
-  color: #FFFFFF;
+  background: #FDF3F3;
+  border-color: rgba(136, 23, 26, 0.24);
 }
 
 /* Country Flag Badges */
@@ -1609,9 +1609,10 @@ table.data-table tr:last-child td {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #FFFFFF;
+  background: #FFFFFF;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   transition: transform 0.15s ease;
 }
 
@@ -1619,29 +1620,29 @@ table.data-table tr:last-child td {
   display: block;
 }
 
-.prov-surfshark {
-  background: linear-gradient(135deg, #168A9E 0%, #0E6C7D 100%);
-  color: #FFFFFF;
+.provider-logo-badge.prov-surfshark {
+  background: #F0FAF9;
+  border-color: rgba(30, 191, 191, 0.28);
 }
 
-.prov-nordvpn {
-  background: linear-gradient(135deg, #4687FF 0%, #1F5CE0 100%);
-  color: #FFFFFF;
+.provider-logo-badge.prov-nordvpn {
+  background: #F2F5FF;
+  border-color: rgba(62, 95, 255, 0.24);
 }
 
-.prov-mullvad {
-  background: linear-gradient(135deg, #24405E 0%, #14253A 100%);
-  color: #FFC400; /* Mullvad brand yellow */
+.provider-logo-badge.prov-mullvad {
+  background: #F4F6F8;
+  border-color: rgba(25, 46, 69, 0.22);
 }
 
-.prov-protonvpn {
-  background: linear-gradient(135deg, #7C5CFC 0%, #5833E0 100%);
-  color: #FFFFFF;
+.provider-logo-badge.prov-protonvpn {
+  background: #F6F3FF;
+  border-color: rgba(109, 74, 255, 0.24);
 }
 
-.prov-custom {
-  background: linear-gradient(135deg, #88171A 0%, #50080B 100%);
-  color: #FFFFFF;
+.provider-logo-badge.prov-custom {
+  background: #FDF3F3;
+  border-color: rgba(136, 23, 26, 0.24);
 }
 
 .loc-prov-pill {
