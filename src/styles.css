@@ -8,8 +8,9 @@
   --text-primary: #151922;
   --text-secondary: #687182;
   --text-muted: #8D96A5;
-  --teal: #168A9E;
-  --teal-hover: #127384;
+  --teal: #3B7BF6;
+  --teal-hover: #2563EB;
+  --teal-soft: #EBF2FF;
   --dark-btn: #151922;
   --dark-hover: #262C3A;
   --success: #16A34A;
@@ -1388,9 +1389,9 @@ table.data-table tr:last-child td {
 }
 
 .provider-menu-item.active {
-  background-color: #EDF6F8;
-  border-color: rgba(22, 138, 158, 0.35);
-  box-shadow: 0 2px 6px rgba(22, 138, 158, 0.08);
+  background-color: var(--teal-soft);
+  border-color: rgba(59, 123, 246, 0.38);
+  box-shadow: 0 2px 6px rgba(59, 123, 246, 0.08);
 }
 
 .provider-menu-item .provider-logo-badge {
@@ -1504,7 +1505,7 @@ table.data-table tr:last-child td {
 }
 
 .prov-surfshark {
-  background-color: #168A9E;
+  background-color: #3B7BF6;
 }
 
 .prov-nordvpn {
@@ -1677,7 +1678,7 @@ table.data-table tr:last-child td {
 }
 
 .surf-right-deck.is-connected .deck-status-accent {
-  color: #36B8C6;
+  color: #528CFF;
 }
 
 .deck-status-sub {
@@ -1717,9 +1718,9 @@ table.data-table tr:last-child td {
 }
 
 .deck-signal-emitter.signal-online .signal-shield-core {
-  background-color: #36B8C6;
-  color: #0E1318;
-  box-shadow: 0 6px 22px rgba(54, 184, 198, 0.45);
+  background-color: #3B7BF6;
+  color: #FFFFFF;
+  box-shadow: 0 6px 22px rgba(59, 123, 246, 0.45);
 }
 
 .signal-ring {
@@ -1737,7 +1738,7 @@ table.data-table tr:last-child td {
 }
 
 .deck-signal-emitter.signal-online .signal-ring {
-  border-color: rgba(54, 184, 198, 0.55);
+  border-color: rgba(59, 123, 246, 0.55);
 }
 
 .signal-ring.ring-1 {
@@ -1864,8 +1865,8 @@ table.data-table tr:last-child td {
 }
 
 .deck-profile-box.is-synced {
-  border-color: rgba(54, 184, 198, 0.65);
-  background-color: rgba(22, 138, 158, 0.14);
+  border-color: rgba(59, 123, 246, 0.65);
+  background-color: rgba(59, 123, 246, 0.14);
 }
 
 .deck-box-left {
@@ -1941,15 +1942,15 @@ table.data-table tr:last-child td {
 }
 
 .deck-box-btn:hover {
-  background-color: #36B8C6;
-  border-color: #36B8C6;
-  color: #0E1318;
+  background-color: #3B7BF6;
+  border-color: #3B7BF6;
+  color: #FFFFFF;
 }
 
 .deck-box-btn.is-connected {
-  background-color: rgba(54, 184, 198, 0.22);
-  border-color: #36B8C6;
-  color: #5CE1E6;
+  background-color: rgba(59, 123, 246, 0.22);
+  border-color: #3B7BF6;
+  color: #7DB0FF;
 }
 
 /* Bottom Dock: Active Location Card + Quick-Connect Button */
@@ -2016,7 +2017,7 @@ table.data-table tr:last-child td {
 .deck-change-link {
   background: none;
   border: none;
-  color: #4FD1DF;
+  color: #6EA4FF;
   font-size: 12.5px;
   font-weight: 600;
   text-decoration: underline;
@@ -2026,7 +2027,7 @@ table.data-table tr:last-child td {
 }
 
 .deck-change-link:hover {
-  color: #7CE8F4;
+  color: #96BEFF;
 }
 
 .deck-quick-connect-btn {
@@ -2034,8 +2035,8 @@ table.data-table tr:last-child td {
   height: 44px;
   border-radius: 11px;
   border: none;
-  background-color: #46B5C3;
-  color: #0F141A;
+  background-color: #3B7BF6;
+  color: #FFFFFF;
   font-size: 14.5px;
   font-weight: 700;
   cursor: pointer;
@@ -2043,7 +2044,7 @@ table.data-table tr:last-child td {
 }
 
 .deck-quick-connect-btn:hover {
-  background-color: #55C5D3;
+  background-color: #4E8BFF;
 }
 
 .deck-quick-connect-btn.is-running {
