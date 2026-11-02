@@ -46,6 +46,10 @@ pub struct WireproxyHandle {
 }
 
 impl WireproxyHandle {
+    pub fn is_alive(&mut self) -> bool {
+        matches!(self.child.try_wait(), Ok(None))
+    }
+
     pub fn stop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();

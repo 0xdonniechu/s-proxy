@@ -56,6 +56,10 @@
     "shortDescription": "Local Hybrid VPN Proxy Hub for Surfshark & GoLogin",
     "longDescription": "Turns Surfshark VPN into local SOCKS5/HTTP proxy endpoints and syncs them to GoLogin profiles.",
     "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper",
+        "silent": true
+      },
       "nsis": {
         "compression": "none",
         "installMode": "currentUser"
