@@ -167,6 +167,7 @@ let catalogSearchQuery = "";
 let catalogFilterType: "all" | "generic" | "static" = "all";
 let catalogProviderFilter: "all" | VpnProvider = "all";
 let catalogTzFilter: string = detectSystemTimezoneInfo().tzGroup;
+let catalogGeoClusterFilter: string = "all";
 let modalMultiTzFilter: string = detectSystemTimezoneInfo().tzGroup;
 
 // GoLogin assignment selection state: profileId -> slotId
@@ -325,6 +326,584 @@ function getTimezoneGroupInfo(
   }
 }
 
+export interface GeoClusterMeta {
+  clusterId: string;
+  clusterLabel: string;
+  shortBadge: string;
+  safeNeighborsNote: string;
+  lat: number;
+  lon: number;
+}
+
+function getGeoClusterAndCoords(
+  countryCode: string,
+  location: string,
+  connectionName: string,
+  tzGroup = ""
+): GeoClusterMeta {
+  const isVi = currentLanguage === "vi";
+  const cc = (countryCode || "").trim().toUpperCase();
+  const city = (location || "").trim().toLowerCase();
+  const conn = (connectionName || "").trim().toLowerCase();
+
+  // 1. UTC+7 (Southeast Asia)
+  if (cc === "VN") {
+    const isHanoi = city.includes("ha noi") || city.includes("hanoi") || conn.includes("han");
+    return {
+      clusterId: "sea_indochina",
+      clusterLabel: isVi
+        ? "🇻🇳🇰🇭🇹🇭 Cụm Đông Dương: Việt Nam ↔ Campuchia ↔ Thái Lan (Chuyển đổi hợp lý < 750 km)"
+        : "🇻🇳🇰🇭🇹🇭 Indochina Cluster: Vietnam ↔ Cambodia ↔ Thailand (Safe Hop < 750 km)",
+      shortBadge: isVi ? "🟢 Cụm Đông Dương (VN/KH/TH)" : "🟢 Indochina (VN/KH/TH)",
+      safeNeighborsNote: isVi
+        ? "Đổi an toàn: VN ↔ Phnom Penh (~210 km) / Bangkok (~740 km). Tránh nhảy sang Jakarta (~1,890 km)"
+        : "Safe hop: VN ↔ Phnom Penh (~210 km) / Bangkok (~740 km). Avoid Jakarta (~1,890 km)",
+      lat: isHanoi ? 21.0285 : 10.8231,
+      lon: isHanoi ? 105.8542 : 106.6297,
+    };
+  }
+  if (cc === "KH") {
+    return {
+      clusterId: "sea_indochina",
+      clusterLabel: isVi
+        ? "🇻🇳🇰🇭🇹🇭 Cụm Đông Dương: Việt Nam ↔ Campuchia ↔ Thái Lan (Chuyển đổi hợp lý < 750 km)"
+        : "🇻🇳🇰🇭🇹🇭 Indochina Cluster: Vietnam ↔ Cambodia ↔ Thailand (Safe Hop < 750 km)",
+      shortBadge: isVi ? "🟢 Cụm Đông Dương (VN/KH/TH)" : "🟢 Indochina (VN/KH/TH)",
+      safeNeighborsNote: isVi
+        ? "Đổi an toàn: Phnom Penh ↔ TP.HCM (~210 km) / Bangkok (~530 km). Tránh Jakarta (~1,980 km)"
+        : "Safe hop: Phnom Penh ↔ HCMC (~210 km) / Bangkok (~530 km). Avoid Jakarta (~1,980 km)",
+      lat: 11.5564,
+      lon: 104.9282,
+    };
+  }
+  if (cc === "TH") {
+    return {
+      clusterId: "sea_indochina",
+      clusterLabel: isVi
+        ? "🇻🇳🇰🇭🇹🇭 Cụm Đông Dương: Việt Nam ↔ Campuchia ↔ Thái Lan (Chuyển đổi hợp lý < 750 km)"
+        : "🇻🇳🇰🇭🇹🇭 Indochina Cluster: Vietnam ↔ Cambodia ↔ Thailand (Safe Hop < 750 km)",
+      shortBadge: isVi ? "🟢 Cụm Đông Dương (VN/KH/TH)" : "🟢 Indochina (VN/KH/TH)",
+      safeNeighborsNote: isVi
+        ? "Đổi an toàn: Bangkok ↔ Phnom Penh (~530 km) / TP.HCM (~740 km). Tránh Jakarta (~2,320 km)"
+        : "Safe hop: Bangkok ↔ Phnom Penh (~530 km) / HCMC (~740 km). Avoid Jakarta (~2,320 km)",
+      lat: 13.7563,
+      lon: 100.5018,
+    };
+  }
+  if (cc === "ID") {
+    return {
+      clusterId: "sea_jakarta",
+      clusterLabel: isVi
+        ? "🇮🇩 Cụm Đảo Indonesia: Jakarta (Cách VN ~1,890 km — Chỉ nên đổi nội bộ ID)"
+        : "🇮🇩 Indonesia Cluster: Jakarta (~1,890 km from VN — Switch within ID only)",
+      shortBadge: isVi ? "⚠️ Đảo xa (Chỉ đổi trong ID)" : "⚠️ Isolated (Switch within ID)",
+      safeNeighborsNote: isVi
+        ? "Cách TP.HCM ~1,890 km qua biển: chỉ nên đổi sang máy chủ Jakarta khác để tránh Impossible Travel"
+        : "~1,890 km across sea from VN: only failover to another Jakarta node",
+      lat: -6.2088,
+      lon: 106.8456,
+    };
+  }
+
+  // 2. UTC+8 (APAC) — Strictly separate SG+MY vs HK+TW vs PH vs Perth!
+  if (cc === "SG") {
+    return {
+      clusterId: "apac_sg_my",
+      clusterLabel: isVi
+        ? "🇸🇬🇲🇾 Cụm Eo Biển Malacca: Singapore ↔ Malaysia (~315 km — Sát biên giới, hợp lý)"
+        : "🇸🇬🇲🇾 Malacca Strait Cluster: Singapore ↔ Malaysia (~315 km — Border Neighbor)",
+      shortBadge: isVi ? "🟢 Cụm SG ↔ MY (~315 km)" : "🟢 SG ↔ MY Cluster (~315 km)",
+      safeNeighborsNote: isVi
+        ? "Đổi hợp lý: Singapore ↔ Malaysia (~315 km). Phi logic nếu nhảy sang Manila (~2,390 km), HK (~2,585 km), Taipei (~3,245 km)"
+        : "Safe hop: Singapore ↔ Malaysia (~315 km). Impossible travel if jumping to Manila/HK/Taipei/Perth",
+      lat: 1.3521,
+      lon: 103.8198,
+    };
+  }
+  if (cc === "MY") {
+    return {
+      clusterId: "apac_sg_my",
+      clusterLabel: isVi
+        ? "🇸🇬🇲🇾 Cụm Eo Biển Malacca: Singapore ↔ Malaysia (~315 km — Sát biên giới, hợp lý)"
+        : "🇸🇬🇲🇾 Malacca Strait Cluster: Singapore ↔ Malaysia (~315 km — Border Neighbor)",
+      shortBadge: isVi ? "🟢 Cụm SG ↔ MY (~315 km)" : "🟢 SG ↔ MY Cluster (~315 km)",
+      safeNeighborsNote: isVi
+        ? "Đổi hợp lý: Malaysia ↔ Singapore (~315 km). Phi logic nếu nhảy sang Manila (~2,460 km), HK (~2,540 km), Taipei (~3,220 km)"
+        : "Safe hop: Malaysia ↔ Singapore (~315 km). Impossible travel if jumping to Manila/HK/Taipei/Perth",
+      lat: 3.139,
+      lon: 101.6869,
+    };
+  }
+  if (cc === "HK") {
+    return {
+      clusterId: "apac_hk_tw",
+      clusterLabel: isVi
+        ? "🇭🇰🇹🇼 Cụm Đông Á (UTC+8): Hong Kong ↔ Đài Loan (~810 km — Cách SG ~2,585 km)"
+        : "🇭🇰🇹🇼 East Asia (UTC+8) Cluster: Hong Kong ↔ Taiwan (~810 km — ~2,585 km from SG)",
+      shortBadge: isVi ? "🟢 Cụm HK ↔ TW (~810 km)" : "🟢 HK ↔ TW Cluster (~810 km)",
+      safeNeighborsNote: isVi
+        ? "Đổi hợp lý: Hong Kong ↔ Taipei (~810 km). Tránh nhảy về Singapore/Malaysia (~2,585 km)"
+        : "Safe hop: Hong Kong ↔ Taipei (~810 km). Avoid jumping to Singapore/Malaysia (~2,585 km)",
+      lat: 22.3193,
+      lon: 114.1694,
+    };
+  }
+  if (cc === "TW") {
+    return {
+      clusterId: "apac_hk_tw",
+      clusterLabel: isVi
+        ? "🇭🇰🇹🇼 Cụm Đông Á (UTC+8): Hong Kong ↔ Đài Loan (~810 km — Cách SG ~3,245 km)"
+        : "🇭🇰🇹🇼 East Asia (UTC+8) Cluster: Hong Kong ↔ Taiwan (~810 km — ~3,245 km from SG)",
+      shortBadge: isVi ? "🟢 Cụm HK ↔ TW (~810 km)" : "🟢 HK ↔ TW Cluster (~810 km)",
+      safeNeighborsNote: isVi
+        ? "Đổi hợp lý: Taipei ↔ Hong Kong (~810 km). Phi logic nếu nhảy từ Singapore sang Taipei (~3,245 km)"
+        : "Safe hop: Taipei ↔ Hong Kong (~810 km). Impossible travel from Singapore (~3,245 km)",
+      lat: 25.033,
+      lon: 121.5654,
+    };
+  }
+  if (cc === "PH") {
+    return {
+      clusterId: "apac_ph",
+      clusterLabel: isVi
+        ? "🇵🇭 Cụm Đảo Philippines: Manila (Cách SG ~2,390 km — Chỉ nên đổi nội bộ PH)"
+        : "🇵🇭 Philippines Cluster: Manila (~2,390 km from SG — Switch within PH only)",
+      shortBadge: isVi ? "⚠️ Đảo Manila (Chỉ đổi nội bộ PH)" : "⚠️ Manila Island (PH only)",
+      safeNeighborsNote: isVi
+        ? "Manila cách Singapore ~2,390 km qua Biển Đông: chỉ nên đổi giữa các máy chủ Manila"
+        : "Manila is ~2,390 km from Singapore: failover within Manila nodes only",
+      lat: 14.5995,
+      lon: 120.9842,
+    };
+  }
+  if (cc === "AU" && (city.includes("perth") || conn.startsWith("au-per") || tzGroup === "asia_utc8")) {
+    return {
+      clusterId: "apac_perth",
+      clusterLabel: isVi
+        ? "🇦🇺 Cụm Tây Úc: Perth (Cách SG ~3,910 km — Chỉ nên đổi nội bộ Perth)"
+        : "🇦🇺 Western Australia: Perth (~3,910 km from SG — Switch within Perth only)",
+      shortBadge: isVi ? "⚠️ Tây Úc Perth (Cách SG ~3,910 km)" : "⚠️ Perth WA (~3,910 km from SG)",
+      safeNeighborsNote: isVi
+        ? "Perth cách Singapore ~3,910 km: tuyệt đối không đổi qua lại với SG/MY/HK/TW/PH"
+        : "Perth is ~3,910 km from Singapore: never hop between Perth and SG/MY/HK/TW/PH",
+      lat: -31.9505,
+      lon: 115.8605,
+    };
+  }
+
+  // 3. UTC+9 (Japan / Korea)
+  if (cc === "JP") {
+    const isOsaka = city.includes("osaka") || conn.includes("osa");
+    return {
+      clusterId: "ea_japan",
+      clusterLabel: isVi
+        ? "🇯🇵 Cụm Nội Địa Nhật Bản: Tokyo ↔ Osaka (~400 km)"
+        : "🇯🇵 Japan Domestic Cluster: Tokyo ↔ Osaka (~400 km)",
+      shortBadge: isVi ? "🟢 Nội địa Nhật (Tokyo/Osaka)" : "🟢 Japan Domestic",
+      safeNeighborsNote: isVi
+        ? "Đổi an toàn: Tokyo ↔ Osaka (~400 km). Cách Seoul ~1,150 km qua biển"
+        : "Safe hop: Tokyo ↔ Osaka (~400 km). Seoul is ~1,150 km across sea",
+      lat: isOsaka ? 34.6937 : 35.6762,
+      lon: isOsaka ? 135.5023 : 139.6503,
+    };
+  }
+  if (cc === "KR") {
+    return {
+      clusterId: "ea_korea",
+      clusterLabel: isVi
+        ? "🇰🇷 Cụm Hàn Quốc: Seoul (Cách Tokyo ~1,150 km — Chỉ nên đổi nội bộ KR)"
+        : "🇰🇷 South Korea Cluster: Seoul (~1,150 km from Tokyo — Switch within KR only)",
+      shortBadge: isVi ? "🟢 Cụm Seoul (Nội bộ KR)" : "🟢 Seoul (KR only)",
+      safeNeighborsNote: isVi
+        ? "Đổi an toàn giữa các node Seoul. Tránh nhảy qua Tokyo (~1,150 km)"
+        : "Safe hop within Seoul nodes. Avoid jumping to Tokyo (~1,150 km)",
+      lat: 37.5665,
+      lon: 126.978,
+    };
+  }
+
+  // 4. US & Canada East (UTC-5)
+  if (tzGroup === "us_east") {
+    if (city.includes("miami") || city.includes("orlando") || city.includes("tampa") || conn.startsWith("us-mia")) {
+      return {
+        clusterId: "use_florida",
+        clusterLabel: isVi
+          ? "🇺🇸 Cụm Florida: Miami / Orlando (Cách New York ~1,750 km)"
+          : "🇺🇸 Florida Cluster: Miami / Orlando (~1,750 km from NY)",
+        shortBadge: isVi ? "🟢 Cụm Florida (Miami)" : "🟢 Florida (Miami)",
+        safeNeighborsNote: isVi
+          ? "Chỉ đổi trong cụm Florida. Cách New York ~1,750 km (Impossible Travel nếu nhảy lên NY)"
+          : "Switch within Florida only (~1,750 km from New York)",
+        lat: city.includes("orlando") || city.includes("tampa") ? 28.5383 : 25.7617,
+        lon: city.includes("orlando") || city.includes("tampa") ? -81.3792 : -80.1918,
+      };
+    }
+    if (city.includes("atlanta") || city.includes("charlotte") || conn.startsWith("us-atl") || conn.startsWith("us-clt")) {
+      return {
+        clusterId: "use_southeast",
+        clusterLabel: isVi
+          ? "🇺🇸 Cụm Đông Nam Mỹ: Atlanta ↔ Charlotte (~365 km)"
+          : "🇺🇸 US Southeast Cluster: Atlanta ↔ Charlotte (~365 km)",
+        shortBadge: isVi ? "🟢 Cụm Atlanta ↔ Charlotte" : "🟢 Atlanta ↔ Charlotte",
+        safeNeighborsNote: isVi
+          ? "Đổi hợp lý: Atlanta ↔ Charlotte (~365 km). Cách New York ~1,200 km"
+          : "Safe hop: Atlanta ↔ Charlotte (~365 km). ~1,200 km from New York",
+        lat: city.includes("charlotte") || conn.startsWith("us-clt") ? 35.2271 : 33.749,
+        lon: city.includes("charlotte") || conn.startsWith("us-clt") ? -80.8431 : -84.388,
+      };
+    }
+    let lat = 40.7128;
+    let lon = -74.006;
+    if (city.includes("boston") || conn.startsWith("us-bos")) {
+      lat = 42.3601;
+      lon = -71.0589;
+    } else if (city.includes("ashburn") || city.includes("washington") || conn.startsWith("us-ash")) {
+      lat = 39.0438;
+      lon = -77.4874;
+    } else if (city.includes("latham") || conn.startsWith("us-ltm")) {
+      lat = 42.747;
+      lon = -73.759;
+    } else if (city.includes("buffalo") || conn.startsWith("us-buf")) {
+      lat = 42.8864;
+      lon = -78.8784;
+    } else if (city.includes("toronto") || conn.startsWith("ca-tor")) {
+      lat = 43.6532;
+      lon = -79.3832;
+    } else if (city.includes("montreal") || conn.startsWith("ca-mon")) {
+      lat = 45.5017;
+      lon = -73.5673;
+    } else if (city.includes("detroit") || conn.startsWith("us-dtw")) {
+      lat = 42.3314;
+      lon = -83.0458;
+    }
+    return {
+      clusterId: "use_northeast",
+      clusterLabel: isVi
+        ? "🇺🇸🇨🇦 Cụm Đông Bắc Mỹ: New York ↔ Boston ↔ Ashburn ↔ Buffalo ↔ Toronto (< 550 km)"
+        : "🇺🇸🇨🇦 Northeast Corridor: NY ↔ Boston ↔ Ashburn ↔ Buffalo ↔ Toronto (< 550 km)",
+      shortBadge: isVi ? "🟢 Cụm Đông Bắc (NY/BOS/ASH/TOR)" : "🟢 Northeast (NY/BOS/ASH/TOR)",
+      safeNeighborsNote: isVi
+        ? "Đổi hợp lý trong trục NY / Newark / Boston / Ashburn / Buffalo / Toronto (< 550 km). Tránh nhảy xuống Miami (~1,750 km)"
+        : "Safe hop within NY / Boston / Ashburn / Toronto corridor. Avoid Miami (~1,750 km)",
+      lat,
+      lon,
+    };
+  }
+
+  // 5. US Central (UTC-6)
+  if (tzGroup === "us_central") {
+    if (city.includes("dallas") || city.includes("houston") || city.includes("austin") || conn.startsWith("us-dal") || conn.startsWith("us-hou")) {
+      return {
+        clusterId: "usc_texas",
+        clusterLabel: isVi
+          ? "🇺🇸 Cụm Texas: Dallas ↔ Houston (~360 km)"
+          : "🇺🇸 Texas Cluster: Dallas ↔ Houston (~360 km)",
+        shortBadge: isVi ? "🟢 Cụm Texas (Dallas ↔ Houston)" : "🟢 Texas (Dallas ↔ Houston)",
+        safeNeighborsNote: isVi
+          ? "Đổi hợp lý: Dallas ↔ Houston (~360 km). Tránh nhảy lên Chicago (~1,290 km)"
+          : "Safe hop: Dallas ↔ Houston (~360 km). Avoid Chicago (~1,290 km)",
+        lat: city.includes("houston") || conn.startsWith("us-hou") ? 29.7604 : 32.7767,
+        lon: city.includes("houston") || conn.startsWith("us-hou") ? -95.3698 : -96.797,
+      };
+    }
+    let lat = 41.8781;
+    let lon = -87.6298;
+    if (city.includes("st. louis") || city.includes("saint louis") || conn.startsWith("us-stl")) {
+      lat = 38.627;
+      lon = -90.1994;
+    } else if (city.includes("kansas") || conn.startsWith("us-kan")) {
+      lat = 39.0997;
+      lon = -94.5786;
+    } else if (city.includes("omaha") || conn.startsWith("us-oma")) {
+      lat = 41.2565;
+      lon = -95.9345;
+    } else if (city.includes("nashville") || conn.startsWith("us-bna")) {
+      lat = 36.1627;
+      lon = -86.7816;
+    }
+    return {
+      clusterId: "usc_midwest",
+      clusterLabel: isVi
+        ? "🇺🇸 Cụm Midwest: Chicago ↔ St. Louis ↔ Kansas ↔ Omaha (< 650 km)"
+        : "🇺🇸 Midwest Cluster: Chicago ↔ St. Louis ↔ Kansas ↔ Omaha (< 650 km)",
+      shortBadge: isVi ? "🟢 Cụm Midwest (CHI/STL/KAN)" : "🟢 Midwest (CHI/STL/KAN)",
+      safeNeighborsNote: isVi
+        ? "Đổi hợp lý trong cụm Midwest (< 650 km). Cách Texas (Dallas/Houston) ~1,290 km"
+        : "Safe hop within Midwest (< 650 km). ~1,290 km from Texas",
+      lat,
+      lon,
+    };
+  }
+
+  // 6. US Mountain (UTC-7)
+  if (tzGroup === "us_mountain") {
+    if (city.includes("phoenix") || conn.startsWith("us-phx")) {
+      return {
+        clusterId: "usm_phoenix",
+        clusterLabel: isVi
+          ? "🇺🇸 Cụm Tây Nam: Phoenix (Cách Denver ~940 km)"
+          : "🇺🇸 Southwest Cluster: Phoenix (~940 km from Denver)",
+        shortBadge: isVi ? "🟢 Cụm Arizona (Phoenix)" : "🟢 Arizona (Phoenix)",
+        safeNeighborsNote: isVi
+          ? "Cách Denver ~940 km: nên đổi nội bộ Phoenix"
+          : "~940 km from Denver: prefer switching within Phoenix",
+        lat: 33.4484,
+        lon: -112.074,
+      };
+    }
+    return {
+      clusterId: "usm_rockies",
+      clusterLabel: isVi
+        ? "🇺🇸 Cụm Rockies: Denver ↔ Salt Lake City (~595 km)"
+        : "🇺🇸 Rockies Cluster: Denver ↔ Salt Lake City (~595 km)",
+      shortBadge: isVi ? "🟢 Cụm Denver ↔ Salt Lake" : "🟢 Denver ↔ Salt Lake",
+      safeNeighborsNote: isVi
+        ? "Đổi hợp lý: Denver ↔ Salt Lake City (~595 km)"
+        : "Safe hop: Denver ↔ Salt Lake City (~595 km)",
+      lat: city.includes("salt lake") || conn.startsWith("us-slc") ? 40.7608 : 39.7392,
+      lon: city.includes("salt lake") || conn.startsWith("us-slc") ? -111.891 : -104.9903,
+    };
+  }
+
+  // 7. US & Canada West (UTC-8)
+  if (tzGroup === "us_west") {
+    if (city.includes("seattle") || city.includes("vancouver") || city.includes("bend") || conn.startsWith("us-sea") || conn.startsWith("ca-van") || conn.startsWith("us-bdn")) {
+      return {
+        clusterId: "usw_pnw",
+        clusterLabel: isVi
+          ? "🇺🇸🇨🇦 Cụm Tây Bắc (PNW): Seattle ↔ Vancouver ↔ Bend (< 420 km)"
+          : "🇺🇸🇨🇦 Pacific Northwest: Seattle ↔ Vancouver ↔ Bend (< 420 km)",
+        shortBadge: isVi ? "🟢 Cụm Seattle ↔ Vancouver" : "🟢 Seattle ↔ Vancouver",
+        safeNeighborsNote: isVi
+          ? "Đổi hợp lý: Seattle ↔ Vancouver (~190 km) / Bend (~420 km). Tránh nhảy xuống LA (~1,540 km)"
+          : "Safe hop: Seattle ↔ Vancouver (~190 km). Avoid Los Angeles (~1,540 km)",
+        lat: city.includes("vancouver") || conn.startsWith("ca-van") ? 49.2827 : city.includes("bend") || conn.startsWith("us-bdn") ? 44.0582 : 47.6062,
+        lon: city.includes("vancouver") || conn.startsWith("ca-van") ? -123.1207 : city.includes("bend") || conn.startsWith("us-bdn") ? -121.3153 : -122.3321,
+      };
+    }
+    let lat = 34.0522;
+    let lon = -118.2437;
+    if (city.includes("las vegas") || conn.startsWith("us-las")) {
+      lat = 36.1699;
+      lon = -115.1398;
+    } else if (city.includes("san jose") || city.includes("san francisco") || conn.startsWith("us-sjc") || conn.startsWith("us-sfo")) {
+      lat = 37.3382;
+      lon = -121.8863;
+    }
+    return {
+      clusterId: "usw_cal_nv",
+      clusterLabel: isVi
+        ? "🇺🇸 Cụm California & Nevada: Los Angeles ↔ Las Vegas ↔ San Jose/SF (< 550 km)"
+        : "🇺🇸 California & Nevada: LA ↔ Las Vegas ↔ San Jose/SF (< 550 km)",
+      shortBadge: isVi ? "🟢 Cụm LA ↔ Vegas ↔ San Jose" : "🟢 LA ↔ Vegas ↔ San Jose",
+      safeNeighborsNote: isVi
+        ? "Đổi hợp lý: LA ↔ Las Vegas (~365 km) / San Jose (~500 km). Tránh nhảy lên Seattle (~1,540 km)"
+        : "Safe hop: LA ↔ Las Vegas (~365 km) / San Jose (~500 km). Avoid Seattle (~1,540 km)",
+      lat,
+      lon,
+    };
+  }
+
+  // 8. UK & Ireland (UTC+0)
+  if (tzGroup === "eu_west") {
+    let lat = 51.5074;
+    let lon = -0.1278;
+    if (city.includes("manchester") || conn.startsWith("uk-man")) {
+      lat = 53.4808;
+      lon = -2.2426;
+    } else if (city.includes("glasgow") || conn.startsWith("uk-gla")) {
+      lat = 55.8642;
+      lon = -4.2518;
+    } else if (cc === "IE" || city.includes("dublin") || conn.startsWith("ie-dub")) {
+      lat = 53.3498;
+      lon = -6.2603;
+    }
+    return {
+      clusterId: "euw_uk_ie",
+      clusterLabel: isVi
+        ? "🇬🇧🇮🇪 Cụm Anh Quốc & Ireland: London ↔ Manchester ↔ Glasgow ↔ Dublin (< 555 km)"
+        : "🇬🇧🇮🇪 UK & Ireland Cluster: London ↔ Manchester ↔ Glasgow ↔ Dublin (< 555 km)",
+      shortBadge: isVi ? "🟢 Cụm UK ↔ Ireland (< 555 km)" : "🟢 UK ↔ Ireland (< 555 km)",
+      safeNeighborsNote: isVi
+        ? "Đổi hợp lý giữa London, Manchester (~260 km), Dublin (~460 km), Glasgow (~555 km)"
+        : "Safe hop across London, Manchester (~260 km), Dublin (~460 km), Glasgow (~555 km)",
+      lat,
+      lon,
+    };
+  }
+
+  // 9. Central Europe (UTC+1)
+  if (tzGroup === "eu_central") {
+    if (cc === "ES" || city.includes("madrid")) {
+      return {
+        clusterId: "euc_iberia",
+        clusterLabel: isVi
+          ? "🇪🇸 Cụm Bán Đảo Iberia: Madrid (Cách Frankfurt ~1,445 km)"
+          : "🇪🇸 Iberia Cluster: Madrid (~1,445 km from Frankfurt)",
+        shortBadge: isVi ? "⚠️ Cụm Madrid (Cách Trung Âu ~1,445 km)" : "⚠️ Madrid (~1,445 km from DE)",
+        safeNeighborsNote: isVi
+          ? "Madrid cách Frankfurt ~1,445 km: chỉ nên đổi nội bộ Tây Ban Nha"
+          : "Madrid is ~1,445 km from Frankfurt: switch within Spain only",
+        lat: 40.4168,
+        lon: -3.7038,
+      };
+    }
+    if (cc === "SE" || city.includes("stockholm")) {
+      return {
+        clusterId: "euc_nordic",
+        clusterLabel: isVi
+          ? "🇸🇪 Cụm Bắc Âu: Stockholm (Cách Frankfurt ~1,185 km)"
+          : "🇸🇪 Nordic Cluster: Stockholm (~1,185 km from Frankfurt)",
+        shortBadge: isVi ? "⚠️ Cụm Bắc Âu (Stockholm)" : "⚠️ Nordic (Stockholm)",
+        safeNeighborsNote: isVi
+          ? "Stockholm cách Trung Âu > 1,100 km: chỉ nên đổi nội bộ Thụy Điển"
+          : "Stockholm is > 1,100 km from Central Europe: switch within Sweden only",
+        lat: 59.3293,
+        lon: 18.0686,
+      };
+    }
+    let lat = 50.1109;
+    let lon = 8.6821;
+    if (city.includes("berlin") || conn.startsWith("de-ber")) {
+      lat = 52.52;
+      lon = 13.405;
+    } else if (cc === "NL" || city.includes("amsterdam")) {
+      lat = 52.3676;
+      lon = 4.9041;
+    } else if (cc === "BE" || city.includes("brussels")) {
+      lat = 50.8503;
+      lon = 4.3517;
+    } else if (cc === "FR" || city.includes("paris")) {
+      lat = 48.8566;
+      lon = 2.3522;
+    } else if (cc === "CH" || city.includes("zurich")) {
+      lat = 47.3769;
+      lon = 8.5417;
+    } else if (cc === "AT" || city.includes("vienna")) {
+      lat = 48.2082;
+      lon = 16.3738;
+    } else if (cc === "IT" || city.includes("milan")) {
+      lat = 45.4642;
+      lon = 9.19;
+    }
+    return {
+      clusterId: "euc_core",
+      clusterLabel: isVi
+        ? "🇩🇪🇳🇱🇧🇪🇫🇷🇨🇭🇮🇹 Cụm Lõi Trung Âu: Frankfurt ↔ Amsterdam ↔ Brussels ↔ Paris ↔ Zurich ↔ Milan (< 520 km)"
+        : "🇩🇪🇳🇱🇧🇪🇫🇷🇨🇭🇮🇹 Central Europe Core: Frankfurt ↔ Amsterdam ↔ Brussels ↔ Paris ↔ Zurich ↔ Milan (< 520 km)",
+      shortBadge: isVi ? "🟢 Lõi Trung Âu (DE/NL/FR/CH)" : "🟢 EU Core (DE/NL/FR/CH)",
+      safeNeighborsNote: isVi
+        ? "Đổi hợp lý giữa Frankfurt, Amsterdam (~360 km), Zurich (~305 km), Paris (~475 km). Tránh nhảy sang Madrid (~1,445 km)"
+        : "Safe hop across Frankfurt, Amsterdam (~360 km), Zurich (~305 km), Paris (~475 km). Avoid Madrid (~1,445 km)",
+      lat,
+      lon,
+    };
+  }
+
+  // 10. Australia East (UTC+10)
+  if (tzGroup === "au_east") {
+    let lat = -33.8688;
+    let lon = 151.2093;
+    if (city.includes("melbourne") || conn.startsWith("au-mel")) {
+      lat = -37.8136;
+      lon = 144.9631;
+    } else if (city.includes("brisbane") || conn.startsWith("au-bne")) {
+      lat = -27.4698;
+      lon = 153.0251;
+    }
+    return {
+      clusterId: "aue_east",
+      clusterLabel: isVi
+        ? "🇦🇺 Cụm Bờ Đông Úc: Sydney ↔ Melbourne / Brisbane (~710 km)"
+        : "🇦🇺 Australia East Coast: Sydney ↔ Melbourne / Brisbane (~710 km)",
+      shortBadge: isVi ? "🟢 Cụm Đông Úc (SYD/MEL/BNE)" : "🟢 AU East (SYD/MEL/BNE)",
+      safeNeighborsNote: isVi
+        ? "Đổi hợp lý: Sydney ↔ Melbourne (~710 km) hoặc Sydney ↔ Brisbane (~730 km)"
+        : "Safe hop: Sydney ↔ Melbourne (~710 km) or Sydney ↔ Brisbane (~730 km)",
+      lat,
+      lon,
+    };
+  }
+
+  return {
+    clusterId: "custom_cluster",
+    clusterLabel: isVi ? "⚙ Cụm Máy chủ Tùy chỉnh (.conf)" : "⚙ Custom Imported Servers (.conf)",
+    shortBadge: "⚙ Custom",
+    safeNeighborsNote: isVi ? "Máy chủ tùy chỉnh (.conf)" : "Custom imported server (.conf)",
+    lat: 0,
+    lon: 0,
+  };
+}
+
+function calculateGeoDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  if ((lat1 === 0 && lon1 === 0) || (lat2 === 0 && lon2 === 0)) return 0;
+  if (Math.abs(lat1 - lat2) < 0.01 && Math.abs(lon1 - lon2) < 0.01) return 0;
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+}
+
+type TravelRiskLevel = "same_city" | "nearby_safe" | "impossible_travel";
+
+interface FailoverEvaluation {
+  loc: SurfsharkLocation;
+  distanceKm: number;
+  sameCluster: boolean;
+  riskLevel: TravelRiskLevel;
+}
+
+function evaluateSlotFailoverCandidate(
+  currentLoc: SurfsharkLocation | undefined,
+  slot: ProxySlotView,
+  candidate: SurfsharkLocation
+): FailoverEvaluation {
+  const curGeo = currentLoc
+    ? getGeoClusterAndCoords(
+        currentLoc.countryCode,
+        currentLoc.location,
+        currentLoc.connectionName,
+        currentLoc.tzGroup
+      )
+    : getGeoClusterAndCoords(
+        slot.countryCode,
+        slot.locationLabel,
+        slot.connectionName,
+        slot.tzGroup
+      );
+  const candGeo = getGeoClusterAndCoords(
+    candidate.countryCode,
+    candidate.location,
+    candidate.connectionName,
+    candidate.tzGroup
+  );
+  const distanceKm = calculateGeoDistanceKm(curGeo.lat, curGeo.lon, candGeo.lat, candGeo.lon);
+  const sameCluster = curGeo.clusterId === candGeo.clusterId;
+
+  let riskLevel: TravelRiskLevel = "impossible_travel";
+  if (distanceKm <= 60) {
+    riskLevel = "same_city";
+  } else if (sameCluster && distanceKm <= 850) {
+    riskLevel = "nearby_safe";
+  } else {
+    riskLevel = "impossible_travel";
+  }
+
+  return {
+    loc: candidate,
+    distanceKm,
+    sameCluster,
+    riskLevel,
+  };
+}
+
 function getLocationTimezoneMeta(loc: SurfsharkLocation): {
   tzGroup: string;
   shortPill: string;
@@ -342,19 +921,30 @@ function getLocationTimezoneMeta(loc: SurfsharkLocation): {
 function renderGroupedLocationOptions(locations: SurfsharkLocation[]): string {
   const groups = new Map<string, SurfsharkLocation[]>();
   for (const loc of locations) {
-    const meta = getLocationTimezoneMeta(loc);
-    const list = groups.get(meta.groupLabel) || [];
+    const geo = getGeoClusterAndCoords(
+      loc.countryCode,
+      loc.location,
+      loc.connectionName,
+      loc.tzGroup
+    );
+    const list = groups.get(geo.clusterLabel) || [];
     list.push(loc);
-    groups.set(meta.groupLabel, list);
+    groups.set(geo.clusterLabel, list);
   }
   let html = "";
   for (const [groupLabel, locs] of groups.entries()) {
     const opts = locs
       .map((loc) => {
         const meta = getLocationTimezoneMeta(loc);
+        const geo = getGeoClusterAndCoords(
+          loc.countryCode,
+          loc.location,
+          loc.connectionName,
+          loc.tzGroup
+        );
         const typeSuffix = loc.locationType === "static" ? " • Static IP" : "";
         return `<option value="${escapeHtml(loc.id)}" data-default-name="${escapeHtml(`${loc.countryCode} • ${loc.country} - ${loc.location}`)}">
-          [${escapeHtml(loc.countryCode)}] ${escapeHtml(loc.country)} — ${escapeHtml(loc.location)} (${escapeHtml(meta.tzBadge)}${typeSuffix} • ${loc.load}% load)
+          [${escapeHtml(loc.countryCode)}] ${escapeHtml(loc.country)} — ${escapeHtml(loc.location)} (${escapeHtml(meta.tzBadge)} • ${escapeHtml(geo.shortBadge)}${typeSuffix} • ${loc.load}% load)
         </option>`;
       })
       .join("");
@@ -557,6 +1147,65 @@ async function handleCheckSlotIp(slotId: string): Promise<void> {
 
 async function handleSwitchSlotLocation(slotId: string, locationId: string): Promise<void> {
   if (!slotId || !locationId) return;
+
+  if (snapshot) {
+    const slot = snapshot.slots.find((s) => s.id === slotId);
+    const targetLoc = snapshot.locations.find((l) => l.id === locationId);
+    if (slot && targetLoc) {
+      const currentLoc = snapshot.locations.find(
+        (l) => l.id === slot.locationId || l.connectionName === slot.connectionName
+      );
+      const evalRes = evaluateSlotFailoverCandidate(currentLoc, slot, targetLoc);
+      if (evalRes.riskLevel === "impossible_travel") {
+        const sameTzSafe = snapshot.locations
+          .filter(
+            (l) =>
+              l.tzGroup === slot.tzGroup &&
+              l.provider === slot.provider &&
+              l.id !== slot.locationId &&
+              l.connectionName !== slot.connectionName
+          )
+          .map((l) => evaluateSlotFailoverCandidate(currentLoc, slot, l))
+          .filter((e) => e.riskLevel === "same_city" || e.riskLevel === "nearby_safe")
+          .sort((a, b) => a.distanceKm - b.distanceKm || a.loc.load - b.loc.load);
+
+        const safeSuggestion =
+          sameTzSafe.length > 0
+            ? `[${sameTzSafe[0].loc.countryCode}] ${sameTzSafe[0].loc.location} (${sameTzSafe[0].distanceKm === 0 ? "0 km" : `~${sameTzSafe[0].distanceKm} km`})`
+            : currentLanguage === "vi"
+              ? "máy chủ khác ngay tại cùng thành phố"
+              : "another node in the exact same city";
+
+        const curLabel = currentLoc
+          ? `[${currentLoc.countryCode}] ${currentLoc.location}`
+          : `[${slot.countryCode}] ${slot.locationLabel || slot.connectionName}`;
+        const targetLabel = `[${targetLoc.countryCode}] ${targetLoc.location}`;
+
+        const warnMsg =
+          currentLanguage === "vi"
+            ? `⚠️ CẢNH BÁO DI CHUYỂN PHI LOGIC (Impossible Travel Guard)!\n\n` +
+              `• Hiện tại: ${curLabel}\n` +
+              `• Đích chuyển tới: ${targetLabel}\n` +
+              `• Khoảng cách thực tế: ~${evalRes.distanceKm.toLocaleString()} km (Dù cùng múi giờ ${slot.utcOffset || ""})\n\n` +
+              `Việc đổi IP nhảy xa hàng nghìn km chỉ sau vài phút rất dễ bị các nền tảng (Google, Facebook, TikTok, Amazon, GoLogin...) phát hiện bất thường vị trí (Impossible Travel).\n\n` +
+              `💡 Gợi ý an toàn: Hãy chọn ${safeSuggestion}.\n\n` +
+              `Bạn có chắc chắn vẫn muốn ép buộc chuyển sang ${targetLabel}?`
+            : `⚠️ IMPOSSIBLE TRAVEL WARNING!\n\n` +
+              `• Current: ${curLabel}\n` +
+              `• Target: ${targetLabel}\n` +
+              `• Real Distance: ~${evalRes.distanceKm.toLocaleString()} km (Same timezone ${slot.utcOffset || ""})\n\n` +
+              `Jumping thousands of kilometers within minutes triggers anti-fraud Impossible Travel detection on platforms.\n\n` +
+              `💡 Safe recommendation: Pick ${safeSuggestion}.\n\n` +
+              `Force switch to ${targetLabel} anyway?`;
+
+        if (!window.confirm(warnMsg)) {
+          render();
+          return;
+        }
+      }
+    }
+  }
+
   showToast(
     currentLanguage === "vi"
       ? "Đang chuyển sang máy chủ mới cùng múi giờ..."
@@ -900,24 +1549,104 @@ function renderHubTab(snap: HubSnapshot): string {
                   )
                 : [];
 
+            const currentSlotLoc =
+              slot.mode === "userspace_wg"
+                ? snap.locations.find(
+                    (l) => l.id === slot.locationId || l.connectionName === slot.connectionName
+                  )
+                : undefined;
+
+            const currentSlotGeo =
+              slot.mode === "userspace_wg"
+                ? getGeoClusterAndCoords(
+                    currentSlotLoc?.countryCode || slot.countryCode,
+                    currentSlotLoc?.location || slot.locationLabel,
+                    currentSlotLoc?.connectionName || slot.connectionName,
+                    slot.tzGroup
+                  )
+                : null;
+
+            const renderFailoverOptionsHtml = (): string => {
+              const evaluated = sameTzAlternatives
+                .map((alt) => evaluateSlotFailoverCandidate(currentSlotLoc, slot, alt))
+                .sort((a, b) => a.distanceKm - b.distanceKm || a.loc.load - b.loc.load);
+
+              const sameCityList = evaluated.filter((e) => e.riskLevel === "same_city");
+              const nearbySafeList = evaluated.filter((e) => e.riskLevel === "nearby_safe");
+              const impossibleList = evaluated.filter((e) => e.riskLevel === "impossible_travel");
+
+              const renderOpt = (e: FailoverEvaluation): string => {
+                const alt = e.loc;
+                const isSelected =
+                  alt.id === slot.locationId || alt.connectionName === slot.connectionName;
+                const staticTag = alt.locationType === "static" ? " (Static)" : "";
+                let prefixIcon = "🟢";
+                let distText = "0 km";
+                if (e.riskLevel === "nearby_safe") {
+                  prefixIcon = "🟡";
+                  distText =
+                    currentLanguage === "vi"
+                      ? `~${e.distanceKm} km • Hợp lý`
+                      : `~${e.distanceKm} km • Safe hop`;
+                } else if (e.riskLevel === "impossible_travel") {
+                  prefixIcon = "🔴";
+                  distText =
+                    currentLanguage === "vi"
+                      ? `~${e.distanceKm} km • Phi logic!`
+                      : `~${e.distanceKm} km • Impossible Travel!`;
+                } else {
+                  distText =
+                    isSelected
+                      ? currentLanguage === "vi"
+                        ? "Đang dùng"
+                        : "Current"
+                      : currentLanguage === "vi"
+                        ? "0 km • Cùng vị trí"
+                        : "0 km • Same city";
+                }
+                return `<option value="${escapeHtml(alt.id)}" ${isSelected ? "selected" : ""}>
+                  ${prefixIcon} [${escapeHtml(alt.countryCode)}] ${escapeHtml(alt.location)}${staticTag} (${distText} • ${alt.load}% load)
+                </option>`;
+              };
+
+              let out = "";
+              if (sameCityList.length > 0) {
+                const label =
+                  currentLanguage === "vi"
+                    ? "🟢 An toàn tuyệt đối — Cùng thành phố / vị trí (0 km)"
+                    : "🟢 Safest — Same City / Location (0 km)";
+                out += `<optgroup label="${escapeHtml(label)}">${sameCityList.map(renderOpt).join("")}</optgroup>`;
+              }
+              if (nearbySafeList.length > 0) {
+                const label =
+                  currentLanguage === "vi"
+                    ? "🟡 Di chuyển hợp lý — Láng giềng gần (< 850 km, cùng cụm)"
+                    : "🟡 Realistic Hop — Nearby Neighbor (< 850 km, same cluster)";
+                out += `<optgroup label="${escapeHtml(label)}">${nearbySafeList.map(renderOpt).join("")}</optgroup>`;
+              }
+              if (impossibleList.length > 0) {
+                const label =
+                  currentLanguage === "vi"
+                    ? "🔴 CẢNH BÁO PHI LOGIC — Quá xa (> 850 km, dễ bị detect Impossible Travel)"
+                    : "🔴 IMPOSSIBLE TRAVEL WARNING — Too Far (> 850 km, platform detection risk)";
+                out += `<optgroup label="${escapeHtml(label)}">${impossibleList.map(renderOpt).join("")}</optgroup>`;
+              }
+              return out;
+            };
+
             const sameTzSwitcherHtml =
               slot.mode === "userspace_wg" && sameTzAlternatives.length > 1
                 ? `<div class="slot-subtext subtext" style="margin-top:4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                      <span class="badge badge-os mono" title="${escapeHtml(slotTzInfo?.groupLabel || "")}">🕒 ${escapeHtml(slotTzInfo?.tzBadge || "")}</span>
-                     <select class="select-input select-same-tz-switch" data-slot-id="${escapeHtml(slot.id)}" style="height:26px; font-size:12px; padding:2px 8px; max-width:270px;" title="${currentLanguage === "vi" ? "Đổi nhanh sang máy chủ khác cùng múi giờ khi VPN lag/die" : "Failover to another server in the exact same timezone"}">
-                       ${sameTzAlternatives
-                         .map(
-                           (alt) =>
-                             `<option value="${escapeHtml(alt.id)}" ${alt.id === slot.locationId || alt.connectionName === slot.connectionName ? "selected" : ""}>
-                               🔄 [${escapeHtml(alt.countryCode)}] ${escapeHtml(alt.location)}${alt.locationType === "static" ? " (Static)" : ""} • ${alt.load}% load
-                             </option>`
-                         )
-                         .join("")}
+                     ${currentSlotGeo ? `<span class="badge badge-safe" title="${escapeHtml(currentSlotGeo.safeNeighborsNote)}">${escapeHtml(currentSlotGeo.shortBadge)}</span>` : ""}
+                     <select class="select-input select-same-tz-switch" data-slot-id="${escapeHtml(slot.id)}" style="height:26px; font-size:12px; padding:2px 8px; max-width:320px;" title="${currentLanguage === "vi" ? "Bộ lọc chống Impossible Travel: Ưu tiên đổi cùng thành phố (🟢) hoặc láng giềng gần (🟡), cảnh báo nếu chọn nơi quá xa (🔴)" : "Impossible Travel Guard: Prioritizes same-city (🟢) or nearby neighbor (🟡), warns on distant jump (🔴)"}">
+                       ${renderFailoverOptionsHtml()}
                      </select>
                    </div>`
                 : slotTzInfo
-                  ? `<div class="slot-subtext subtext" style="margin-top:4px;">
+                  ? `<div class="slot-subtext subtext" style="margin-top:4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                        <span class="badge badge-os mono">🕒 ${escapeHtml(slotTzInfo.tzBadge)}</span>
+                       ${currentSlotGeo ? `<span class="badge badge-safe" title="${escapeHtml(currentSlotGeo.safeNeighborsNote)}">${escapeHtml(currentSlotGeo.shortBadge)}</span>` : ""}
                      </div>`
                   : "";
 
@@ -1489,15 +2218,52 @@ function renderCatalogTab(snap: HubSnapshot): string {
         : orderedTzGroups[0] || "all";
 
   const query = catalogSearchQuery.trim().toLowerCase();
-  const filtered = snap.locations.filter((loc: SurfsharkLocation) => {
+  const tzFilteredPool = snap.locations.filter((loc: SurfsharkLocation) => {
     if (catalogProviderFilter !== "all" && loc.provider !== catalogProviderFilter) {
-      return false;
-    }
-    if (catalogFilterType !== "all" && loc.locationType !== catalogFilterType) {
       return false;
     }
     if (effectiveTzFilter !== "all" && (loc.tzGroup || "custom") !== effectiveTzFilter) {
       return false;
+    }
+    return true;
+  });
+
+  // Build Geo-Cluster options within the selected timezone (Impossible Travel Guard)
+  const clusterMap = new Map<string, { meta: GeoClusterMeta; count: number }>();
+  for (const loc of tzFilteredPool) {
+    const geo = getGeoClusterAndCoords(
+      loc.countryCode,
+      loc.location,
+      loc.connectionName,
+      loc.tzGroup
+    );
+    const existing = clusterMap.get(geo.clusterId);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      clusterMap.set(geo.clusterId, { meta: geo, count: 1 });
+    }
+  }
+
+  const effectiveClusterFilter =
+    catalogGeoClusterFilter !== "all" && clusterMap.has(catalogGeoClusterFilter)
+      ? catalogGeoClusterFilter
+      : "all";
+
+  const filtered = tzFilteredPool.filter((loc: SurfsharkLocation) => {
+    if (catalogFilterType !== "all" && loc.locationType !== catalogFilterType) {
+      return false;
+    }
+    if (effectiveClusterFilter !== "all") {
+      const geo = getGeoClusterAndCoords(
+        loc.countryCode,
+        loc.location,
+        loc.connectionName,
+        loc.tzGroup
+      );
+      if (geo.clusterId !== effectiveClusterFilter) {
+        return false;
+      }
     }
     if (!query) return true;
     return (
@@ -1509,6 +2275,31 @@ function renderCatalogTab(snap: HubSnapshot): string {
       (loc.utcOffset || "").toLowerCase().includes(query)
     );
   });
+
+  const geoClusterSelectHtml =
+    clusterMap.size > 1
+      ? `<select id="catalog-cluster-select" class="select-input catalog-tz-select" title="${
+          currentLanguage === "vi"
+            ? "Lọc theo cụm địa lý gần nhau để tránh nền tảng phát hiện Impossible Travel khi đổi proxy"
+            : "Filter by realistic geographic proximity cluster to prevent Impossible Travel detection"
+        }">
+          <option value="all" ${effectiveClusterFilter === "all" ? "selected" : ""}>
+            ${escapeHtml(
+              currentLanguage === "vi"
+                ? `🛡 Tất cả cụm địa lý trong múi giờ (${clusterMap.size} cụm — Đã tách chống Impossible Travel)`
+                : `🛡 All Geo-Clusters in Timezone (${clusterMap.size} clusters — Separated against Impossible Travel)`
+            )}
+          </option>
+          ${Array.from(clusterMap.entries())
+            .map(
+              ([cid, entry]) =>
+                `<option value="${escapeHtml(cid)}" ${effectiveClusterFilter === cid ? "selected" : ""}>
+                  ${escapeHtml(`${entry.meta.clusterLabel} (${entry.count} proxy)`)}
+                </option>`
+            )
+            .join("")}
+        </select>`
+      : "";
 
   const tzSelectOptionsHtml = [
     ...orderedTzGroups.map((g) => {
@@ -1536,7 +2327,7 @@ function renderCatalogTab(snap: HubSnapshot): string {
   const sysTzGroupMeta = getTimezoneGroupInfo(sysTzInfo.tzGroup);
   const isUsingSystemTz = effectiveTzFilter === sysTzInfo.tzGroup;
 
-  // Recommended top 2 lowest-load servers within the currently selected timezone
+  // Recommended top 2 lowest-load servers within the same safe Geo-Cluster (Impossible Travel Guard)
   let primaryRecLoc: SurfsharkLocation | null = null;
   let backupRecLoc: SurfsharkLocation | null = null;
 
@@ -1547,7 +2338,31 @@ function renderCatalogTab(snap: HubSnapshot): string {
         ? sortedByLoad.find((l) => l.countryCode.toUpperCase() === "VN" && l.load <= 35) ||
           sortedByLoad[0]
         : sortedByLoad[0];
-    backupRecLoc = sortedByLoad.find((l) => l.id !== primaryRecLoc?.id) || null;
+    if (primaryRecLoc) {
+      const primaryGeo = getGeoClusterAndCoords(
+        primaryRecLoc.countryCode,
+        primaryRecLoc.location,
+        primaryRecLoc.connectionName,
+        primaryRecLoc.tzGroup
+      );
+      backupRecLoc =
+        sortedByLoad.find((l) => {
+          if (l.id === primaryRecLoc?.id) return false;
+          const candGeo = getGeoClusterAndCoords(
+            l.countryCode,
+            l.location,
+            l.connectionName,
+            l.tzGroup
+          );
+          const dist = calculateGeoDistanceKm(
+            primaryGeo.lat,
+            primaryGeo.lon,
+            candGeo.lat,
+            candGeo.lon
+          );
+          return candGeo.clusterId === primaryGeo.clusterId && dist <= 850;
+        }) || null;
+    }
   }
 
   const providerTabsHtml = [
@@ -1571,6 +2386,12 @@ function renderCatalogTab(snap: HubSnapshot): string {
     const provShort = loc.provider.toUpperCase();
     const isCustomLoc = loc.region === "Custom";
     const tzMeta = getLocationTimezoneMeta(loc);
+    const geoMeta = getGeoClusterAndCoords(
+      loc.countryCode,
+      loc.location,
+      loc.connectionName,
+      loc.tzGroup
+    );
     const typeBadge =
       loc.locationType === "static"
         ? `<span class="badge badge-os mono" style="font-size:10px;padding:1px 6px;">Static IP</span>`
@@ -1584,6 +2405,9 @@ function renderCatalogTab(snap: HubSnapshot): string {
           <div class="loc-info-col">
             <div class="loc-country">${escapeHtml(loc.country)} ${typeBadge}</div>
             <div class="loc-city"><strong>${escapeHtml(loc.location)}</strong> &bull; <span class="mono">${escapeHtml(tzMeta.tzBadge)}</span></div>
+            <div style="margin-top: 4px;">
+              <span class="badge badge-safe" style="font-size:10.5px; padding:2px 7px;" title="${escapeHtml(geoMeta.safeNeighborsNote)}">${escapeHtml(geoMeta.shortBadge)}</span>
+            </div>
           </div>
           <div class="loc-load-col">
             <span class="load-pill ${loadClass}">${loc.load}%</span>
@@ -1610,27 +2434,35 @@ function renderCatalogTab(snap: HubSnapshot): string {
   if (filtered.length === 0) {
     groupedSectionsHtml = `<div class="empty-card">${escapeHtml(strings.catalog.noServersMatch)}</div>`;
   } else {
-    const byTz = new Map<string, SurfsharkLocation[]>();
+    const byCluster = new Map<string, { meta: GeoClusterMeta; locs: SurfsharkLocation[] }>();
     for (const loc of filtered) {
-      const g = loc.tzGroup || "custom";
-      const arr = byTz.get(g) || [];
-      arr.push(loc);
-      byTz.set(g, arr);
+      const geo = getGeoClusterAndCoords(
+        loc.countryCode,
+        loc.location,
+        loc.connectionName,
+        loc.tzGroup
+      );
+      const entry = byCluster.get(geo.clusterId);
+      if (entry) {
+        entry.locs.push(loc);
+      } else {
+        byCluster.set(geo.clusterId, { meta: geo, locs: [loc] });
+      }
     }
-    for (const [tzGroup, locs] of byTz.entries()) {
-      const info = getTimezoneGroupInfo(tzGroup, locs[0]?.utcOffset, locs[0]?.ianaTimezone);
+    for (const [, group] of byCluster.entries()) {
       const countLabel =
         currentLanguage === "vi"
-          ? `${locs.length} máy chủ cùng múi giờ (Chuyển đổi dự phòng an toàn)`
-          : `${locs.length} same-timezone nodes (Safe failover pool)`;
+          ? `${group.locs.length} proxy trong cụm địa lý hợp lý (Chống Impossible Travel)`
+          : `${group.locs.length} proxies in safe geo-cluster (Impossible Travel Guard)`;
       groupedSectionsHtml += `
         <div class="locations-section" style="margin-bottom: 18px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
-            <div class="section-title-sm" style="margin-bottom:0;">${escapeHtml(info.groupLabel)}</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:6px;">
+            <div class="section-title-sm" style="margin-bottom:0;">${escapeHtml(group.meta.clusterLabel)}</div>
             <span class="badge badge-safe mono">${escapeHtml(countLabel)}</span>
           </div>
+          <div class="subtext-sm" style="margin-bottom: 10px;">💡 ${escapeHtml(group.meta.safeNeighborsNote)}</div>
           <div class="locations-grid">
-            ${locs.map(renderLocationCard).join("")}
+            ${group.locs.map(renderLocationCard).join("")}
           </div>
         </div>
       `;
@@ -1639,12 +2471,12 @@ function renderCatalogTab(snap: HubSnapshot): string {
 
   const primaryRecTitle =
     currentLanguage === "vi"
-      ? "Máy chủ tối ưu nhất trong múi giờ đang chọn (#1)"
-      : "Best Server in Selected Timezone (#1)";
+      ? "Máy chủ tối ưu nhất trong cụm địa lý (#1)"
+      : "Best Server in Geo-Cluster (#1)";
   const backupRecTitle =
     currentLanguage === "vi"
-      ? "Máy chủ dự phòng tải thấp cùng múi giờ (#2)"
-      : "Best Same-Timezone Failover Node (#2)";
+      ? "Dự phòng an toàn cùng cụm (< 850 km • Chống Impossible Travel)"
+      : "Safe Same-Cluster Failover (< 850 km • Impossible Travel Guard)";
 
   return `
     <!-- Multi-Provider Filter Bar -->
@@ -1654,17 +2486,17 @@ function renderCatalogTab(snap: HubSnapshot): string {
       </div>
     </div>
 
-    <!-- Timezone Dropdown Selector Card (Defaults to Host System Timezone) -->
+    <!-- Timezone & Geo-Proximity Dropdown Selector Card (Defaults to Host System Timezone) -->
     <div class="surf-card tz-dropdown-bar">
       <div class="tz-dropdown-left">
         <label for="catalog-tz-select" class="tz-dropdown-label">
-          🕒 ${escapeHtml(currentLanguage === "vi" ? "Chọn Múi Giờ Proxy:" : "Select Proxy Timezone:")}
+          🕒 ${escapeHtml(currentLanguage === "vi" ? "Chọn Múi Giờ & Cụm Địa Lý Hợp Lý:" : "Select Timezone & Safe Geo-Cluster:")}
         </label>
         <div class="subtext-sm">
           ${escapeHtml(
             currentLanguage === "vi"
-              ? `Mặc định hiển thị theo múi giờ máy đang dùng (${sysTzGroupMeta.tzBadge})`
-              : `Defaults to your computer's current timezone (${sysTzGroupMeta.tzBadge})`
+              ? `Mặc định theo múi giờ máy (${sysTzGroupMeta.tzBadge}) • Tách cụm khoảng cách thật để chống nền tảng detect Impossible Travel`
+              : `Defaults to system timezone (${sysTzGroupMeta.tzBadge}) • Separated by real-world distance against Impossible Travel detection`
           )}
         </div>
       </div>
@@ -1672,6 +2504,7 @@ function renderCatalogTab(snap: HubSnapshot): string {
         <select id="catalog-tz-select" class="select-input catalog-tz-select">
           ${tzSelectOptionsHtml}
         </select>
+        ${geoClusterSelectHtml}
         ${
           !isUsingSystemTz
             ? `<button type="button" class="btn btn-secondary btn-sm" id="btn-reset-system-tz" title="${escapeHtml(sysTzGroupMeta.groupLabel)}">
@@ -2515,6 +3348,16 @@ function attachEventListeners(): void {
   if (catalogTzSelect) {
     catalogTzSelect.addEventListener("change", () => {
       catalogTzFilter = catalogTzSelect.value;
+      catalogGeoClusterFilter = "all";
+      render();
+    });
+  }
+
+  // Catalog geo-cluster dropdown selector (Impossible Travel Guard)
+  const catalogClusterSelect = document.getElementById("catalog-cluster-select") as HTMLSelectElement | null;
+  if (catalogClusterSelect) {
+    catalogClusterSelect.addEventListener("change", () => {
+      catalogGeoClusterFilter = catalogClusterSelect.value;
       render();
     });
   }
@@ -2524,6 +3367,7 @@ function attachEventListeners(): void {
   if (btnResetSystemTz) {
     btnResetSystemTz.addEventListener("click", () => {
       catalogTzFilter = detectSystemTimezoneInfo().tzGroup;
+      catalogGeoClusterFilter = "all";
       render();
     });
   }
