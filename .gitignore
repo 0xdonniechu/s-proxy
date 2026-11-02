@@ -7,6 +7,9 @@ HANDOFF.md
 # Build outputs & dependencies
 node_modules/
 dist/
+release/
+*.exe
+*.msi
 src-tauri/target/
 src-tauri/gen/
 
