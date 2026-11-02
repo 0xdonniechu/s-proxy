@@ -580,6 +580,36 @@ pub fn fetch_mullvad_catalog_blocking() -> Result<Vec<SurfsharkLocation>, String
     Ok(locs)
 }
 
+pub fn fetch_surfshark_catalog_blocking() -> Result<Vec<SurfsharkLocation>, String> {
+    let mut combined: Vec<SurfsharkLocation> = Vec::new();
+
+    if let Ok(raw_generic) = run_curl_get("https://api.surfshark.com/v4/server/clusters", None) {
+        if let Ok(mut locs) = crate::surfshark::parse_locations_json(&raw_generic, LocationType::Generic) {
+            combined.append(&mut locs);
+        }
+    }
+
+    if let Ok(raw_static) = run_curl_get("https://api.surfshark.com/v4/server/clusters/static", None) {
+        if let Ok(mut locs) = crate::surfshark::parse_locations_json(&raw_static, LocationType::Static) {
+            combined.append(&mut locs);
+        }
+    }
+
+    if combined.is_empty() {
+        return Err("No servers retrieved from Surfshark API".to_string());
+    }
+
+    let locs = crate::surfshark::curate_and_sort_locations(combined);
+    save_cached_provider_locations(VpnProvider::Surfshark, &locs)?;
+
+    let cache_clusters = app_data_dir().join("clusters.json");
+    if let Ok(serialized) = serde_json::to_string_pretty(&locs) {
+        let _ = fs::write(cache_clusters, serialized);
+    }
+
+    Ok(locs)
+}
+
 pub fn parse_and_build_custom_location(
     provider: VpnProvider,
     raw_conf: &str,

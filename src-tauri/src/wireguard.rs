@@ -192,6 +192,36 @@ pub fn resolve_wireproxy_binary(custom_path: &str) -> Option<PathBuf> {
 
     #[cfg(target_os = "windows")]
     {
+        // Check well-known package manager installation locations
+        if let Ok(userprofile) = std::env::var("USERPROFILE") {
+            let scoop_path = PathBuf::from(&userprofile)
+                .join("scoop")
+                .join("shims")
+                .join("wireproxy.exe");
+            if scoop_path.is_file() {
+                return Some(scoop_path);
+            }
+        }
+        if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
+            let winget_path = PathBuf::from(&localappdata)
+                .join("Microsoft")
+                .join("WinGet")
+                .join("Links")
+                .join("wireproxy.exe");
+            if winget_path.is_file() {
+                return Some(winget_path);
+            }
+        }
+        for std_win_path in [
+            r"C:\ProgramData\chocolatey\bin\wireproxy.exe",
+            r"C:\tools\wireproxy\wireproxy.exe",
+        ] {
+            let candidate = PathBuf::from(std_win_path);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+
         let mut cmd = Command::new("where.exe");
         cmd.arg("wireproxy.exe")
             .stdout(Stdio::piped())

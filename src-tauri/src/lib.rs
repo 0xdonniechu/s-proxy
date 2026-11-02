@@ -12,9 +12,9 @@ use gologin::{
 };
 use providers::{
     fetch_mullvad_catalog_blocking, fetch_nordvpn_catalog_blocking,
-    fetch_nordvpn_private_key_blocking, load_cached_provider_locations,
-    parse_and_build_custom_location, validate_provider_network_fields, ProviderView,
-    SaveProviderPayload, VpnProvider,
+    fetch_nordvpn_private_key_blocking, fetch_surfshark_catalog_blocking,
+    load_cached_provider_locations, parse_and_build_custom_location,
+    validate_provider_network_fields, ProviderView, SaveProviderPayload, VpnProvider,
 };
 use proxy_engine::{start_proxy_listener, RunningProxyHandle, UpstreamConfig};
 use serde::{Deserialize, Serialize};
@@ -867,7 +867,15 @@ async fn sync_provider_catalog(
     };
 
     let (fetched_locs, maybe_fetched_pk) = tokio::task::spawn_blocking(move || match provider {
-        VpnProvider::Surfshark => Ok::<_, String>((load_local_catalog(), None)),
+        VpnProvider::Surfshark => {
+            let mut locs = load_local_catalog();
+            if locs.is_empty() {
+                if let Ok(online_locs) = fetch_surfshark_catalog_blocking() {
+                    locs = online_locs;
+                }
+            }
+            Ok::<_, String>((locs, None))
+        }
         VpnProvider::Nordvpn => {
             let pk = if !api_token.trim().is_empty() {
                 Some(fetch_nordvpn_private_key_blocking(&api_token)?)

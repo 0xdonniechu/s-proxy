@@ -459,16 +459,70 @@ pub fn load_local_catalog() -> Vec<SurfsharkLocation> {
     }
 
     if catalog.is_empty() {
-        let mac_clusters_paths = [
-            PathBuf::from("/Applications/Surfshark.app/Contents/Resources/clusters.json"),
-            std::env::var("HOME")
-                .map(|h| {
-                    PathBuf::from(h)
-                        .join("Applications/Surfshark.app/Contents/Resources/clusters.json")
-                })
-                .unwrap_or_default(),
-        ];
-        for path in &mac_clusters_paths {
+        let mut candidate_clusters_paths: Vec<PathBuf> = Vec::new();
+
+        // Cached or app-managed catalog
+        candidate_clusters_paths.push(crate::settings::app_data_dir().join("clusters.json"));
+
+        // macOS standard installation paths
+        candidate_clusters_paths.push(PathBuf::from("/Applications/Surfshark.app/Contents/Resources/clusters.json"));
+        if let Ok(home) = std::env::var("HOME") {
+            candidate_clusters_paths.push(
+                PathBuf::from(home)
+                    .join("Applications/Surfshark.app/Contents/Resources/clusters.json"),
+            );
+        }
+
+        // Windows standard installation paths
+        if let Ok(prog_files) = std::env::var("ProgramFiles") {
+            candidate_clusters_paths.push(
+                PathBuf::from(&prog_files)
+                    .join("Surfshark")
+                    .join("resources")
+                    .join("clusters.json"),
+            );
+            candidate_clusters_paths.push(
+                PathBuf::from(&prog_files)
+                    .join("Surfshark")
+                    .join("clusters.json"),
+            );
+        }
+        candidate_clusters_paths.push(PathBuf::from(r"C:\Program Files\Surfshark\resources\clusters.json"));
+        candidate_clusters_paths.push(PathBuf::from(r"C:\Program Files (x86)\Surfshark\resources\clusters.json"));
+
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            candidate_clusters_paths.push(
+                PathBuf::from(&local_app_data)
+                    .join("Programs")
+                    .join("Surfshark")
+                    .join("resources")
+                    .join("clusters.json"),
+            );
+            candidate_clusters_paths.push(
+                PathBuf::from(&local_app_data)
+                    .join("Surfshark")
+                    .join("clusters.json"),
+            );
+        }
+
+        if let Ok(program_data) = std::env::var("ProgramData") {
+            candidate_clusters_paths.push(
+                PathBuf::from(&program_data)
+                    .join("Surfshark")
+                    .join("clusters.json"),
+            );
+        }
+        candidate_clusters_paths.push(PathBuf::from(r"C:\ProgramData\Surfshark\clusters.json"));
+
+        if let Ok(app_data) = std::env::var("APPDATA") {
+            candidate_clusters_paths.push(
+                PathBuf::from(&app_data)
+                    .join("Surfshark")
+                    .join("clusters.json"),
+            );
+        }
+
+        for path in &candidate_clusters_paths {
             if path.as_os_str().is_empty() {
                 continue;
             }
@@ -804,8 +858,151 @@ pub fn detect_macos_adapters() -> Vec<DetectedAdapter> {
     parse_macos_ifconfig_v(&ifconfig_out, &default_ifaces)
 }
 
+pub fn parse_windows_cli_adapters(
+    netsh_ifaces: &str,
+    netsh_addrs: &str,
+    route_print: &str,
+) -> Vec<DetectedAdapter> {
+    use std::collections::HashMap;
+
+    // 1. Parse netsh interface ipv4 show interfaces
+    let mut iface_map: HashMap<String, (u32, bool)> = HashMap::new();
+    for line in netsh_ifaces.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with("---") || trimmed.starts_with("Idx") {
+            continue;
+        }
+        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+        if parts.len() >= 5 {
+            if let Ok(idx) = parts[0].parse::<u32>() {
+                let is_up = parts[3].eq_ignore_ascii_case("connected");
+                let name = parts[4..].join(" ");
+                iface_map.insert(name, (idx, is_up));
+            }
+        }
+    }
+
+    // 2. Parse route print 0.0.0.0
+    let mut desc_map: HashMap<u32, String> = HashMap::new();
+    let mut in_if_list = false;
+    let mut default_route_ips: Vec<String> = Vec::new();
+
+    for line in route_print.lines() {
+        let trimmed = line.trim();
+        if trimmed.contains("Interface List") {
+            in_if_list = true;
+            continue;
+        }
+        if in_if_list {
+            if trimmed.starts_with("===") {
+                in_if_list = false;
+                continue;
+            }
+            if let Some(dot_pos) = trimmed.find('.') {
+                let idx_str = trimmed[..dot_pos].trim();
+                if let Ok(idx) = idx_str.parse::<u32>() {
+                    if let Some(last_dots) = trimmed.rfind("...") {
+                        let desc = trimmed[last_dots + 3..].trim();
+                        if !desc.is_empty() {
+                            desc_map.insert(idx, desc.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        if trimmed.starts_with("0.0.0.0") {
+            let tokens: Vec<&str> = trimmed.split_whitespace().collect();
+            if tokens.len() >= 4 && tokens[0] == "0.0.0.0" && tokens[1] == "0.0.0.0" {
+                let if_ip = tokens[3].trim();
+                if if_ip.parse::<Ipv4Addr>().is_ok() && !default_route_ips.contains(&if_ip.to_string()) {
+                    default_route_ips.push(if_ip.to_string());
+                }
+            }
+        }
+    }
+
+    // 3. Parse netsh interface ipv4 show addresses
+    let mut detected: Vec<DetectedAdapter> = Vec::new();
+    let mut current_iface: Option<String> = None;
+
+    for line in netsh_addrs.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("Configuration for interface ") {
+            if let (Some(start), Some(end)) = (trimmed.find('"'), trimmed.rfind('"')) {
+                if end > start {
+                    current_iface = Some(trimmed[start + 1..end].trim().to_string());
+                    continue;
+                }
+            }
+        }
+
+        if let Some(ref iface_name) = current_iface {
+            if let Some(rest) = trimmed.strip_prefix("IP Address:") {
+                let ip_str = rest.trim();
+                if ip_str.is_empty() || ip_str.starts_with("127.") {
+                    continue;
+                }
+                if ip_str.parse::<Ipv4Addr>().is_ok() {
+                    let (idx, status_up) = if let Some(info) = iface_map.get(iface_name) {
+                        *info
+                    } else {
+                        (0, true)
+                    };
+                    let desc = desc_map
+                        .get(&idx)
+                        .cloned()
+                        .unwrap_or_else(|| iface_name.clone());
+                    let is_default_route = default_route_ips.iter().any(|d| d == ip_str);
+                    let kind = classify_adapter(iface_name, &desc, ip_str, is_default_route);
+
+                    detected.push(DetectedAdapter {
+                        name: iface_name.clone(),
+                        description: desc,
+                        if_index: idx,
+                        ipv4: ip_str.to_string(),
+                        status_up,
+                        is_default_route,
+                        kind,
+                    });
+                }
+            }
+        }
+    }
+
+    detected
+}
+
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[cfg(target_os = "windows")]
+fn detect_windows_adapters_cli_fallback() -> Vec<DetectedAdapter> {
+    use std::os::windows::process::CommandExt;
+
+    let netsh_ifaces = std::process::Command::new("netsh.exe")
+        .args(["interface", "ipv4", "show", "interfaces"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+
+    let netsh_addrs = std::process::Command::new("netsh.exe")
+        .args(["interface", "ipv4", "show", "addresses"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+
+    let route_print = std::process::Command::new("route.exe")
+        .args(["print", "0.0.0.0"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+
+    parse_windows_cli_adapters(&netsh_ifaces, &netsh_addrs, &route_print)
+}
 
 #[cfg(target_os = "windows")]
 pub fn detect_windows_adapters() -> Vec<DetectedAdapter> {
@@ -813,21 +1010,23 @@ pub fn detect_windows_adapters() -> Vec<DetectedAdapter> {
 
     let ps_script = r#"$routes = @(Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Sort-Object RouteMetric, InterfaceMetric); $defaultIfIndex = if ($routes.Count -gt 0) { $routes[0].InterfaceIndex } else { -1 }; $adapters = @(Get-NetAdapter -ErrorAction SilentlyContinue); $ips = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue); $res = @(foreach ($ip in $ips) { $adapter = $adapters | Where-Object { $_.InterfaceIndex -eq $ip.InterfaceIndex } | Select-Object -First 1; $desc = if ($adapter) { $adapter.InterfaceDescription } else { '' }; $alias = if ($adapter) { $adapter.Name } else { $ip.InterfaceAlias }; $up = if ($adapter) { $adapter.Status -eq 'Up' } else { $false }; $isDef = ($ip.InterfaceIndex -eq $defaultIfIndex); [PSCustomObject]@{ name = [string]$alias; description = [string]$desc; ifIndex = [int]$ip.InterfaceIndex; ipv4 = [string]$ip.IPAddress; statusUp = [bool]$up; isDefaultRoute = [bool]$isDef; } }); if (-not $res -or $res.Count -eq 0) { '[]' } else { $json = ConvertTo-Json -InputObject @($res) -Compress; if ($json.StartsWith('[')) { $json } else { '[' + $json + ']' } }"#;
 
-    let output = match std::process::Command::new("powershell.exe")
+    let ps_adapters = match std::process::Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", ps_script])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
     {
-        Ok(out) => out,
-        Err(_) => return Vec::new(),
+        Ok(out) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            parse_adapters_json(&stdout)
+        }
+        _ => Vec::new(),
     };
 
-    if !output.status.success() {
-        return Vec::new();
+    if !ps_adapters.is_empty() {
+        ps_adapters
+    } else {
+        detect_windows_adapters_cli_fallback()
     }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    parse_adapters_json(&stdout)
 }
 
 #[cfg(target_os = "macos")]
@@ -1158,6 +1357,58 @@ utun100: flags=8051<UP,POINTOPOINT,RUNNING,MULTICAST> mtu 1280 index 22
         assert!(!utun100.is_default_route);
         assert_eq!(utun100.description, "Userspace Mesh / CGNAT Tunnel (utun)");
         assert_eq!(utun100.kind, AdapterKind::OtherVpn);
+    }
+
+    #[test]
+    fn test_parse_windows_cli_adapters() {
+        let netsh_ifaces = "\
+Idx     Met         MTU          State                Name\n\
+---  ----------  ----------  ------------  ---------------------------\n\
+  1          75  4294967295  connected     Loopback Pseudo-Interface 1\n\
+ 14          15        1500  connected     Ethernet 2\n\
+ 20          20        1420  connected     Surfshark WireGuard\n";
+
+        let netsh_addrs = "\
+Configuration for interface \"Ethernet 2\"\n\
+    DHCP enabled:                         Yes\n\
+    IP Address:                           10.0.2.15\n\
+    Subnet Prefix:                        10.0.2.0/24 (mask 255.255.255.0)\n\
+    Default Gateway:                      10.0.2.2\n\
+Configuration for interface \"Surfshark WireGuard\"\n\
+    DHCP enabled:                         No\n\
+    IP Address:                           10.14.0.2\n\
+    Subnet Prefix:                        10.14.0.0/16 (mask 255.255.0.0)\n";
+
+        let route_print = "\
+===========================================================================\n\
+Interface List\n\
+ 14...52 54 00 12 34 56 ......Red Hat VirtIO Ethernet Adapter #2\n\
+ 20...00 ff 12 34 56 78 ......Surfshark Wintun Adapter\n\
+  1...........................Software Loopback Interface 1\n\
+===========================================================================\n\
+IPv4 Route Table\n\
+===========================================================================\n\
+Active Routes:\n\
+Network Destination        Netmask          Gateway       Interface  Metric\n\
+          0.0.0.0          0.0.0.0         10.0.2.2        10.0.2.15     15\n\
+===========================================================================\n";
+
+        let adapters = parse_windows_cli_adapters(netsh_ifaces, netsh_addrs, route_print);
+        assert_eq!(adapters.len(), 2);
+
+        let eth = adapters.iter().find(|a| a.name == "Ethernet 2").expect("eth found");
+        assert_eq!(eth.if_index, 14);
+        assert_eq!(eth.ipv4, "10.0.2.15");
+        assert!(eth.status_up);
+        assert!(eth.is_default_route);
+        assert_eq!(eth.kind, AdapterKind::PrimaryIsp);
+
+        let surf = adapters.iter().find(|a| a.name == "Surfshark WireGuard").expect("surf found");
+        assert_eq!(surf.if_index, 20);
+        assert_eq!(surf.ipv4, "10.14.0.2");
+        assert!(surf.status_up);
+        assert!(!surf.is_default_route);
+        assert_eq!(surf.kind, AdapterKind::Surfshark);
     }
 
     #[test]
