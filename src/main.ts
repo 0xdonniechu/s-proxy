@@ -3412,16 +3412,18 @@ function render(): void {
       break;
   }
 
+  const showRightDeck = activeTab === "hub" || activeTab === "catalog";
+
   app.innerHTML = `
     <div class="app-shell">
       ${renderSidebarRail()}
-      <div class="surf-split-workspace">
+      <div class="surf-split-workspace ${showRightDeck ? "has-right-deck" : "no-right-deck"}">
         <main class="main-area">
           <div class="main-container">
             ${panelContent}
           </div>
         </main>
-        ${renderSurfsharkRightDeck(snapshot)}
+        ${showRightDeck ? renderSurfsharkRightDeck(snapshot) : ""}
       </div>
     </div>
   `;
