@@ -177,6 +177,10 @@ const gologinModeSelection: Record<string, "socks5" | "http"> = {};
 // Hub slot GoLogin selection state: slotId -> profileId
 const hubSlotGologinSelection: Record<string, string> = {};
 
+// Right Surfshark-style Radar & Profile Deck selected slot / location
+let selectedDeckSlotId = "";
+let selectedDeckLocationId = "";
+
 // Modal states
 let isCreateBridgeModalOpen = false;
 let isCreateMultiModalOpen = false;
@@ -2992,6 +2996,348 @@ function renderSettingsTab(snap: HubSnapshot): string {
   `;
 }
 
+// 6. Right Surfshark-Style Connection Radar & Profile Deck
+function renderSurfsharkRightDeck(snap: HubSnapshot): string {
+  const isVi = currentLanguage === "vi";
+  const surf = snap.surfsharkAdapter;
+  const isSurfConnected =
+    Boolean(surf && surf.statusUp && !surf.ipv4.startsWith("169.254.") && surf.ipv4 !== "");
+  const runningSlots = snap.slots.filter((s) => s.status === "running");
+
+  // Pick focused slot for the right deck
+  let activeSlot: ProxySlotView | undefined = snap.slots.find((s) => s.id === selectedDeckSlotId);
+  if (!activeSlot) {
+    activeSlot = runningSlots[0] || snap.slots[0];
+    if (activeSlot) {
+      selectedDeckSlotId = activeSlot.id;
+    }
+  }
+
+  const isConnected = runningSlots.length > 0 || isSurfConnected;
+  const sysTzInfo = detectSystemTimezoneInfo();
+
+  // Determine current location & exit IP for the top radar header
+  let currentCountryText = isVi ? "Việt Nam (Mạng gốc)" : "Vietnam (Host)";
+  let currentIpText = snap.hostIspIp || "Detecting...";
+  let currentLocCode = "VN";
+  let currentLocTitle = isVi ? "Chưa bật Proxy" : "No Active Proxy";
+  let currentLocSub = isVi ? "Chọn máy chủ bên trái để bật" : "Pick a location on the left";
+
+  if (activeSlot) {
+    const matchedLoc = snap.locations.find(
+      (l) => l.id === activeSlot?.locationId || l.connectionName === activeSlot?.connectionName
+    );
+    currentLocCode = activeSlot.countryCode || matchedLoc?.countryCode || "VP";
+    currentLocTitle = matchedLoc
+      ? `${matchedLoc.country} • ${matchedLoc.location}`
+      : activeSlot.locationLabel || activeSlot.name;
+    currentLocSub = `${activeSlot.listenHost}:${activeSlot.port} (${
+      activeSlot.status === "running"
+        ? isVi
+          ? "Đang phát SOCKS5/HTTP"
+          : "Active Local Proxy"
+        : isVi
+          ? "Đang tạm dừng"
+          : "Stopped"
+    })`;
+
+    if (activeSlot.egress && activeSlot.egress.exitIp) {
+      currentCountryText = `${activeSlot.egress.city ? `${activeSlot.egress.city}, ` : ""}${activeSlot.egress.country}`;
+      currentIpText = activeSlot.egress.exitIp;
+    } else if (activeSlot.status === "running") {
+      currentCountryText = matchedLoc ? `${matchedLoc.location}, ${matchedLoc.country}` : activeSlot.name;
+      currentIpText = `${activeSlot.listenHost}:${activeSlot.port}`;
+    }
+  } else if (isSurfConnected && surf) {
+    currentCountryText = "Surfshark Tunnel";
+    currentIpText = surf.ipv4;
+    currentLocCode = "SS";
+    currentLocTitle = "Surfshark Adapter";
+    currentLocSub = surf.name;
+  }
+
+  // Fallback recommended location in current timezone if no slot exists yet
+  const fallbackLoc =
+    snap.locations.find((l) => l.id === selectedDeckLocationId) ||
+    snap.locations
+      .filter((l) => (l.tzGroup || "custom") === (catalogTzFilter === "all" ? sysTzInfo.tzGroup : catalogTzFilter))
+      .sort((a, b) => a.load - b.load)[0] ||
+    snap.locations[0];
+
+  if (!activeSlot && fallbackLoc) {
+    currentLocCode = fallbackLoc.countryCode;
+    currentLocTitle = `${fallbackLoc.country} • ${fallbackLoc.location}`;
+    currentLocSub = isVi
+      ? `Tải ${fallbackLoc.load}% • Bấm Quick-connect để tạo`
+      : `${fallbackLoc.load}% load • Click Quick-connect`;
+  }
+
+  // Build the profile / slot boxes inside the middle area (matching the 3 marked boxes in the screenshot)
+  let deckBoxesHtml = "";
+  if (snap.gologinProfiles.length > 0) {
+    deckBoxesHtml = snap.gologinProfiles
+      .map((prof) => {
+        const linkedSlot = snap.slots.find(
+          (s) =>
+            s.linkedGologinProfileId === prof.id ||
+            (prof.proxyHost === "127.0.0.1" && prof.proxyPort === s.port)
+        );
+        const targetSlot = linkedSlot || activeSlot;
+        const isSyncedToActive =
+          Boolean(targetSlot && prof.proxyHost === "127.0.0.1" && prof.proxyPort === targetSlot.port);
+        const proxyStatusText =
+          prof.proxyHost && prof.proxyPort > 0
+            ? `${prof.proxyMode.toUpperCase()}://${prof.proxyHost}:${prof.proxyPort}`
+            : isVi
+              ? "Chưa gắn Proxy"
+              : "No Proxy Linked";
+
+        return `
+          <div class="deck-profile-box ${isSyncedToActive ? "is-synced" : ""}" data-profile-id="${escapeHtml(prof.id)}">
+            <div class="deck-box-left">
+              <div class="deck-box-avatar">${isSyncedToActive ? "🟢" : "👤"}</div>
+              <div class="deck-box-meta">
+                <div class="deck-box-name">${escapeHtml(prof.name)} <span class="deck-os-tag">${escapeHtml(prof.os)}</span></div>
+                <div class="deck-box-sub mono">${escapeHtml(proxyStatusText)}</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="deck-box-btn btn-deck-connect-profile ${isSyncedToActive ? "is-connected" : ""}"
+              data-profile-id="${escapeHtml(prof.id)}"
+              data-slot-id="${escapeHtml(targetSlot?.id || "")}"
+              title="${escapeHtml(
+                targetSlot
+                  ? isVi
+                    ? `Gắn & Bật Proxy :${targetSlot.port} cho profile ${prof.name}`
+                    : `Sync & Start Proxy :${targetSlot.port} on ${prof.name}`
+                  : isVi
+                    ? "Tạo hoặc chọn 1 Slot Proxy trước"
+                    : "Create or select a Proxy Slot first"
+              )}"
+            >
+              ${
+                isSyncedToActive
+                  ? isVi
+                    ? `✓ :${targetSlot?.port}`
+                    : `✓ :${targetSlot?.port}`
+                  : targetSlot
+                    ? isVi
+                      ? `⚡ Gắn :${targetSlot.port}`
+                      : `⚡ Connect :${targetSlot.port}`
+                    : isVi
+                      ? "+ Gắn"
+                      : "+ Link"
+              }
+            </button>
+          </div>
+        `;
+      })
+      .join("");
+  } else if (snap.slots.length > 0) {
+    // If GoLogin profiles haven't been fetched yet, render the user's Proxy Slots in the 3+ boxes, plus a quick Fetch GoLogin button
+    deckBoxesHtml =
+      snap.slots
+        .map((slot) => {
+          const isSlotRunning = slot.status === "running";
+          const isSelected = slot.id === activeSlot?.id;
+          return `
+            <div class="deck-profile-box ${isSelected ? "is-synced" : ""}" data-deck-slot-id="${escapeHtml(slot.id)}">
+              <div class="deck-box-left deck-select-slot-trigger" data-slot-id="${escapeHtml(slot.id)}" style="cursor:pointer;">
+                <div class="deck-box-avatar">${isSlotRunning ? "🟢" : "⚪"}</div>
+                <div class="deck-box-meta">
+                  <div class="deck-box-name">${escapeHtml(slot.name)}</div>
+                  <div class="deck-box-sub mono">127.0.0.1:${slot.port} &bull; ${escapeHtml(slot.countryCode || "VPN")}</div>
+                </div>
+              </div>
+              <div style="display:flex; gap:4px; align-items:center;">
+                <button
+                  type="button"
+                  class="deck-box-btn btn-copy"
+                  data-copy="${escapeHtml(slot.socks5Uri)}"
+                  data-label="SOCKS5"
+                  title="Copy socks5://127.0.0.1:${slot.port}"
+                >
+                  Copy
+                </button>
+                <button
+                  type="button"
+                  class="deck-box-btn ${isSlotRunning ? "is-connected" : ""} btn-toggle-slot"
+                  data-slot-id="${escapeHtml(slot.id)}"
+                  data-start="${!isSlotRunning}"
+                >
+                  ${isSlotRunning ? (isVi ? "Đang bật" : "Active") : isVi ? "Bật" : "Connect"}
+                </button>
+              </div>
+            </div>
+          `;
+        })
+        .join("") +
+      `
+        <div class="deck-profile-box deck-empty-hint-box">
+          <div class="deck-box-left">
+            <div class="deck-box-avatar">🌐</div>
+            <div class="deck-box-meta">
+              <div class="deck-box-name">${isVi ? "Đồng bộ GoLogin Profiles" : "Sync GoLogin Profiles"}</div>
+              <div class="deck-box-sub">${isVi ? "Tải danh sách profile vào các ô này" : "Load browser profiles into these slots"}</div>
+            </div>
+          </div>
+          <button type="button" class="deck-box-btn" id="btn-deck-fetch-gologin">
+            ${isVi ? "Tải Profile" : "Fetch"}
+          </button>
+        </div>
+      `;
+  } else {
+    // Default 3 placeholder boxes matching the user's screenshot when both profiles & slots are empty
+    deckBoxesHtml = [1, 2, 3]
+      .map(
+        (idx) => `
+        <div class="deck-profile-box">
+          <div class="deck-box-left">
+            <div class="deck-box-avatar">P${idx}</div>
+            <div class="deck-box-meta">
+              <div class="deck-box-name">${isVi ? `Profile Slot #${idx} (Chưa gắn)` : `Profile Slot #${idx} (Unassigned)`}</div>
+              <div class="deck-box-sub mono">127.0.0.1:${snap.settings.basePort + idx - 1}</div>
+            </div>
+          </div>
+          <button type="button" class="deck-box-btn btn-deck-Empty-action" data-idx="${idx}">
+            ${isVi ? "+ Kết nối" : "+ Connect"}
+          </button>
+        </div>
+      `
+      )
+      .join("");
+  }
+
+  const slotSelectorOptions =
+    snap.slots.length > 1
+      ? `<select id="deck-active-slot-select" class="deck-slot-mini-select" title="${isVi ? "Chọn Proxy Slot đang điều khiển" : "Select active Proxy Slot"}">
+          ${snap.slots
+            .map(
+              (s) =>
+                `<option value="${escapeHtml(s.id)}" ${s.id === activeSlot?.id ? "selected" : ""}>
+                  :${s.port} • ${escapeHtml(s.name)} (${s.status === "running" ? "ON" : "OFF"})
+                </option>`
+            )
+            .join("")}
+        </select>`
+      : "";
+
+  const isSlotRunning = Boolean(activeSlot && activeSlot.status === "running");
+
+  return `
+    <aside class="surf-right-deck ${isConnected ? "is-connected" : "is-disconnected"}">
+      <!-- Top Radar Header with Expanding Concentric Signal Rings -->
+      <div class="deck-radar-header">
+        <div class="deck-status-heading">
+          <div class="deck-status-accent">
+            ${
+              isConnected
+                ? isVi
+                  ? "Đã kết nối"
+                  : "Connected"
+                : isVi
+                  ? "Kết nối ngay"
+                  : "Connect"
+            }
+          </div>
+          <div class="deck-status-sub">
+            ${
+              isConnected
+                ? isVi
+                  ? "an toàn & chống rò rỉ"
+                  : "to stay safe"
+                : isVi
+                  ? "để bảo vệ IP"
+                  : "to stay safe"
+            }
+          </div>
+        </div>
+
+        <!-- Animated Concentric Signal Rings (Surfshark Shield Emblem) -->
+        <div class="deck-signal-emitter ${isConnected ? "signal-online" : "signal-standby"}" title="${isConnected ? "Active Tunnel Signal" : "Standby Signal"}">
+          <span class="signal-ring ring-1"></span>
+          <span class="signal-ring ring-2"></span>
+          <span class="signal-ring ring-3"></span>
+          <span class="signal-ring ring-4"></span>
+          <div class="signal-shield-core">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Location & Exit IP Row -->
+      <div class="deck-ip-row">
+        <div class="deck-ip-col">
+          <div class="deck-ip-val">${escapeHtml(currentCountryText)}</div>
+          <div class="deck-ip-lbl">${isVi ? "Vị trí của bạn" : "Your Location"}</div>
+        </div>
+        <div class="deck-ip-col deck-ip-col-right">
+          <div class="deck-ip-val mono">${escapeHtml(currentIpText)}</div>
+          <div class="deck-ip-lbl">${isVi ? "Địa chỉ IP / Port" : "IP Address"}</div>
+        </div>
+      </div>
+
+      <!-- Connectable Profile / Proxy Boxes (Middle Section) -->
+      <div class="deck-profiles-header">
+        <span>${
+          snap.gologinProfiles.length > 0
+            ? isVi
+              ? `GoLogin Profiles (${snap.gologinProfiles.length})`
+              : `GoLogin Profiles (${snap.gologinProfiles.length})`
+            : isVi
+              ? `Các Khay Kết Nối Nhanh (${snap.slots.length || 3})`
+              : `Quick Connect Profiles (${snap.slots.length || 3})`
+        }</span>
+        ${slotSelectorOptions}
+      </div>
+      <div class="deck-profiles-list">
+        ${deckBoxesHtml}
+      </div>
+
+      <!-- Bottom Active Local Location Indicator & Quick-Connect Button -->
+      <div class="deck-bottom-dock">
+        <div class="deck-active-loc-card">
+          <div class="deck-loc-left">
+            ${renderFlagBadge(currentLocCode)}
+            <div class="deck-loc-text">
+              <div class="deck-loc-title">${escapeHtml(currentLocTitle)}</div>
+              <div class="deck-loc-sub mono">${escapeHtml(currentLocSub)}</div>
+            </div>
+          </div>
+          <button type="button" class="deck-change-link" id="btn-deck-change-loc">
+            ${isVi ? "Đổi" : "Change"}
+          </button>
+        </div>
+
+        <button
+          type="button"
+          class="deck-quick-connect-btn ${isSlotRunning ? "is-running" : ""}"
+          id="btn-deck-quick-connect"
+          data-slot-id="${escapeHtml(activeSlot?.id || "")}"
+          data-loc-id="${escapeHtml(fallbackLoc?.id || "")}"
+        >
+          ${
+            activeSlot
+              ? isSlotRunning
+                ? isVi
+                  ? `Ngắt kết nối (:${activeSlot.port})`
+                  : `Disconnect (:${activeSlot.port})`
+                : isVi
+                  ? `Kết nối nhanh (:${activeSlot.port})`
+                  : `Quick-connect (:${activeSlot.port})`
+              : isVi
+                ? "Kết nối nhanh (Quick-connect)"
+                : "Quick-connect"
+          }
+        </button>
+      </div>
+    </aside>
+  `;
+}
+
 // Master Render Function
 function render(): void {
   const app = document.getElementById("app");
@@ -3027,11 +3373,14 @@ function render(): void {
   app.innerHTML = `
     <div class="app-shell">
       ${renderSidebarRail()}
-      <main class="main-area">
-        <div class="main-container">
-          ${panelContent}
-        </div>
-      </main>
+      <div class="surf-split-workspace">
+        <main class="main-area">
+          <div class="main-container">
+            ${panelContent}
+          </div>
+        </main>
+        ${renderSurfsharkRightDeck(snapshot)}
+      </div>
     </div>
   `;
 
@@ -3593,6 +3942,121 @@ function attachEventListeners(): void {
         void handleImportWgConf(content);
       };
       reader.readAsText(file);
+    });
+  }
+
+  // Right Surfshark-style Deck interactions
+  const deckSlotSelect = document.getElementById("deck-active-slot-select") as HTMLSelectElement | null;
+  if (deckSlotSelect) {
+    deckSlotSelect.addEventListener("change", () => {
+      selectedDeckSlotId = deckSlotSelect.value;
+      render();
+    });
+  }
+
+  document.querySelectorAll<HTMLElement>(".deck-select-slot-trigger").forEach((el) => {
+    el.addEventListener("click", () => {
+      const sid = el.getAttribute("data-slot-id");
+      if (sid) {
+        selectedDeckSlotId = sid;
+        render();
+      }
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>(".btn-deck-connect-profile").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const profileId = btn.getAttribute("data-profile-id") || "";
+      const slotId = btn.getAttribute("data-slot-id") || "";
+      if (!profileId) return;
+      if (!slotId) {
+        activeTab = "catalog";
+        render();
+        showToast(
+          currentLanguage === "vi"
+            ? "Hãy chọn 1 máy chủ bên cột trái để tạo Proxy trước khi gắn vào Profile!"
+            : "Pick a server on the left to create a Proxy Slot first!"
+        );
+        return;
+      }
+      const targetSlot = snapshot?.slots.find((s) => s.id === slotId);
+      if (targetSlot && targetSlot.status !== "running") {
+        void handleToggleSlot(slotId, true).then(() => {
+          void handleAssignSlotToGoLogin(slotId, profileId, "socks5");
+        });
+      } else {
+        void handleAssignSlotToGoLogin(slotId, profileId, "socks5");
+      }
+    });
+  });
+
+  const btnDeckFetchGologin = document.getElementById("btn-deck-fetch-gologin");
+  if (btnDeckFetchGologin) {
+    btnDeckFetchGologin.addEventListener("click", () => {
+      void handleFetchGoLoginProfiles();
+    });
+  }
+
+  document.querySelectorAll<HTMLButtonElement>(".btn-deck-Empty-action").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      activeTab = "catalog";
+      render();
+      showToast(
+        currentLanguage === "vi"
+          ? "Chọn 1 máy chủ bất kỳ ở cột bên trái để tạo và kết nối vào ô này!"
+          : "Select a server on the left panel to create & connect!"
+      );
+    });
+  });
+
+  const btnDeckChangeLoc = document.getElementById("btn-deck-change-loc");
+  if (btnDeckChangeLoc) {
+    btnDeckChangeLoc.addEventListener("click", () => {
+      activeTab = "catalog";
+      render();
+    });
+  }
+
+  const btnDeckQuickConnect = document.getElementById("btn-deck-quick-connect");
+  if (btnDeckQuickConnect) {
+    btnDeckQuickConnect.addEventListener("click", () => {
+      const slotId = btnDeckQuickConnect.getAttribute("data-slot-id") || "";
+      const fallbackLocId = btnDeckQuickConnect.getAttribute("data-loc-id") || "";
+      if (slotId && snapshot) {
+        const slot = snapshot.slots.find((s) => s.id === slotId);
+        if (slot) {
+          void handleToggleSlot(slotId, slot.status !== "running");
+          return;
+        }
+      }
+      if (fallbackLocId && snapshot) {
+        const loc = snapshot.locations.find((l) => l.id === fallbackLocId);
+        if (loc) {
+          void handleCreateSlot(
+            {
+              name: `${loc.countryCode} • ${loc.country} - ${loc.location}`,
+              port: null,
+              mode: "userspace_wg",
+              locationId: loc.id,
+              adapterHint: null,
+              autoStart: true,
+            },
+            false
+          );
+          return;
+        }
+      }
+      void handleCreateSlot(
+        {
+          name: "Surfshark Bridge",
+          port: null,
+          mode: "adapter_bridge",
+          locationId: null,
+          adapterHint: null,
+          autoStart: true,
+        },
+        false
+      );
     });
   }
 }
