@@ -755,6 +755,48 @@ table.data-table tr:last-child td {
 }
 
 /* 8. View 2: Locations Elements */
+.tz-dropdown-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 22px;
+  flex-wrap: wrap;
+  border: 1px solid rgba(22, 138, 158, 0.22);
+}
+
+.tz-dropdown-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 240px;
+}
+
+.tz-dropdown-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.tz-dropdown-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.catalog-tz-select {
+  flex: 1;
+  min-width: 300px;
+  max-width: 580px;
+  height: 42px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
 .catalog-top-row {
   display: flex;
   align-items: center;
