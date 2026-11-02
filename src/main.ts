@@ -233,6 +233,25 @@ function renderFlagBadge(countryCode: string): string {
   return `<span class="flag-badge" aria-label="${escapeHtml(code)}">${escapeHtml(code)}</span>`;
 }
 
+// Authentic Provider Vector Logos (SimpleIcons Official Brand Paths)
+function renderProviderSvg(provider: VpnProvider | string, size = 20, className = ""): string {
+  const p = (provider || "").toLowerCase();
+  const cls = className ? ` class="${escapeHtml(className)}"` : "";
+  switch (p) {
+    case "surfshark":
+      return `<svg role="img" viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor"${cls}><title>Surfshark</title><path d="M11.47 0C7.815.2 6.3 2.293 5.872 3.43c-1.615 4.866-3.127 14.325-3.33 15.662-.201 1.31-.228 2.119-.228 2.119 0 .328.026.705.102 1.059.454 1.286 1.792 2.37 4.768 1.287a192.353 192.353 0 0 0 9.533-4.44c1.387-.807 3.227-2.32 4.236-4.312.404-.807.682-1.716.733-2.65v-.452c-.026-2.295-.052-4.692-.204-7.013 0 0-.125-1.488-.2-2.017-.076-.53-.177-.733-.177-.733C20.626.906 19.693.38 18.71.126 18.23.026 17.7.024 17.095 0Zm4.692 4.44h.252c.277 0 .48.2.48.452V6.53c0 .252-.203.455-.48.455h-.252c-1.589 0-2.875 1.26-2.875 2.8v2.498c0 2.976-2.472 5.37-5.498 5.37h-.254c-.277 0-.478-.2-.478-.452v-1.64c0-.253.226-.454.478-.454h.254c1.589 0 2.875-1.262 2.875-2.8V9.81c0-2.977 2.472-5.373 5.498-5.373z"/></svg>`;
+    case "nordvpn":
+      return `<svg role="img" viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor"${cls}><title>NordVPN</title><path d="M2.2838 21.5414A11.9866 11.9866 0 010 14.4832C0 7.8418 5.3727 2.4586 12 2.4586c6.6279 0 12 5.3832 12 12.0246a11.9853 11.9853 0 01-2.2838 7.0582l-5.7636-9.3783-.5565.9419.5645 2.6186L12 8.9338l-2.45 4.1447.5707 2.6451-2.0764-3.5555-5.7605 9.3733z"/></svg>`;
+    case "mullvad":
+      return `<svg role="img" viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor"${cls}><title>Mullvad</title><path d="M12 0C5.371 0 0 5.362 0 12c0 6.629 5.381 12 12 12s12-5.371 12-12S18.629 0 12 0zm1.651 3.363c1.908-.02 4.059 1.28 4.701 2.951.381 1 .267 2.086-.057 3.086-.266.819-1.238 2-.876 2.886-.143-.038-3.124-1.048-3.98-1.505-1.344-.838-2.544-1.867-3.448-2.657l-.03-.029-3.047-1.447a1.037 1.037 0 0 1-.104-.058c.419.029 2.085.23 2.828.058-.143-.39-.105-.896.095-1.372.286-.657.83-1.095 1.343-1.095.105 0 .2.019.296.057A3.411 3.411 0 0 1 12.39 3.6a3.49 3.49 0 0 1 1.26-.237zm-2.499.97c-.457 0-.962.42-1.228 1.02-.2.447-.229.933-.086 1.304a.813.813 0 0 0 .41.457.696.696 0 0 0 .285.058c.457 0 .962-.42 1.22-1.02.161-.362.209-.742.152-1.076a.91.91 0 0 0-.467-.676.6.6 0 0 0-.286-.067zm0 .286c.057 0 .115.01.172.038.152.067.266.238.304.467.048.276.01.6-.133.905-.21.485-.619.838-.962.838a.444.444 0 0 1-.162-.029c-.142-.057-.219-.19-.257-.295-.114-.286-.085-.705.076-1.086.21-.495.62-.838.962-.838zM3.01 6.362 2.943 7.79l.133.037.943-1.123-.648 1.104c1.01-.2 2.658-.247 4.42-.114l1.837.895c.915.8 2.124 1.839 3.486 2.686l3.553 1.4.438.638h-.372l.781.943-.714-.114c.01.066.714.876.714.876l-.562.076c.02.067.572.753.572.753l-.42-.03c.03.106.677 1.153.677 1.163 0 .01-.229-.057-.381-.105.543 1.21 1.324 1.448 1.362 1.943-2.667 3.419-9.667 3.952-12.771.124-.067-.314.619-.838 1.057-1.429.21-.286.4-.59.533-.905.19-.58-.21-.533-.476-1.028-.047-.086-.086-.2-.047-.305.057-.19.38-.324.438-.286 1.314.877 3.762.59 5.266-1.142 0 0 .458.114.696.18l-.686-.457-.048-.028c-.028.019-.067.038-.095.057-3.124 2.38-5.152 1.352-5.152 1.352a3.243 3.243 0 0 0-.438-.39c-2.124-1.495-3.639-3.505-4.324-4.81l-.257 1.381.057-1.838-.914 1.276.676-1.371c-.505-.067-.79-.572-.676-.981.094-.426.63-.738 1.096-.527z"/></svg>`;
+    case "protonvpn":
+      return `<svg role="img" viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor"${cls}><title>Proton VPN</title><path d="m10.176 20.058.858-1.28 6.513-9.838c.57-.86.026-2.014-1.005-2.131L.378 4.95l8.373 15.055a.84.84 0 0 0 1.424.052h.001zM23.586 7.14l-9.662 14.61c-1.036 1.567-3.38 1.478-4.293-.162l-.093-.168c.3-.01.594-.086.855-.235a1.85 1.85 0 0 0 .612-.57l.86-1.28 6.516-9.844c.46-.694.525-1.56.173-2.314a2.375 2.375 0 0 0-1.899-1.364L.493 3.956l-.476-.054C-.163 2.392 1.101.95 2.784 1.143l18.991 2.16c1.856.21 2.835 2.289 1.812 3.838z"/></svg>`;
+    case "custom":
+    default:
+      return `<svg role="img" viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor"${cls}><title>WireGuard</title><path d="M23.98 11.645S24.533 0 11.735 0C.418 0 .064 11.17.064 11.17S-1.6 24 11.997 24C25.04 24 23.98 11.645 23.98 11.645zM8.155 7.576c2.4-1.47 5.469-.571 6.618 1.638.218.419.246 1.063.108 1.503-.477 1.516-1.601 2.366-3.145 2.728.455-.39.817-.832.933-1.442a2.112 2.112 0 0 0-.364-1.677 2.14 2.14 0 0 0-2.465-.75c-.95.36-1.47 1.228-1.377 2.294.087.99.839 1.632 2.245 1.876-.21.111-.372.193-.53.281a5.113 5.113 0 0 0-1.644 1.43c-.143.192-.24.208-.458.075-2.827-1.729-3.009-6.067.078-7.956zM6.04 18.258c-.455.116-.895.286-1.359.438.227-1.532 2.021-2.943 3.539-2.782a3.91 3.91 0 0 0-.74 2.072c-.504.093-.98.155-1.44.272zM15.703 3.3c.448.017.898.01 1.347.02a2.324 2.324 0 0 1 .334.047 3.249 3.249 0 0 1-.34.434c-.16.15-.341.296-.573.069-.055-.055-.187-.042-.283-.044-.447-.005-.894-.02-1.34-.003a8.323 8.323 0 0 0-1.154.118c-.072.013-.178.25-.146.338.078.207.191.435.359.567.619.49 1.277.928 1.9 1.413.604.472 1.167.99 1.51 1.7.446.928.46 1.9.267 2.877-.322 1.63-1.147 2.98-2.483 3.962-.538.395-1.205.62-1.821.903-.543.25-1.1.465-1.644.712-.98.446-1.53 1.51-1.369 2.615.149 1.015 1.04 1.862 2.059 2.037 1.223.21 2.486-.586 2.785-1.83.336-1.397-.423-2.646-1.845-3.024l-.256-.066c.38-.17.708-.291 1.012-.458q.793-.437 1.558-.925c.15-.096.231-.096.36.014.977.846 1.56 1.898 1.724 3.187.27 2.135-.74 4.096-2.646 5.101-2.948 1.555-6.557-.215-7.208-3.484-.558-2.8 1.418-5.34 3.797-5.83 1.023-.211 1.958-.637 2.685-1.425.47-.508.697-.944.775-1.141a3.165 3.165 0 0 0 .217-1.158 2.71 2.71 0 0 0-.237-.992c-.248-.566-1.2-1.466-1.435-1.656l-2.24-1.754c-.079-.065-.168-.06-.36-.047-.23.016-.815.048-1.067-.018.204-.155.76-.38 1-.56-.726-.49-1.554-.314-2.315-.46.176-.328 1.046-.831 1.541-.888a7.323 7.323 0 0 0-.135-.822c-.03-.111-.154-.22-.263-.283-.262-.154-.541-.281-.843-.434a1.755 1.755 0 0 1 .906-.28 3.385 3.385 0 0 1 .908.088c.54.123.97.042 1.399-.324-.338-.136-.676-.26-1.003-.407a9.843 9.843 0 0 1-.942-.493c.85.118 1.671.437 2.54.32l.022-.118-2.018-.47c1.203-.11 2.323-.128 3.384.388.299.146.61.266.897.432.14.08.233.24.348.365.09.098.164.23.276.29.424.225.89.234 1.366.223l.01-.16c.479.15 1.017.702 1.017 1.105-.776 0-1.55-.003-2.325.004-.083 0-.165.061-.247.094.078.046.155.128.235.131z M14.703 2.153a.118.118 0 0 0-.016.19.179.179 0 0 0 .246.065c.075-.038.148-.078.238-.125-.072-.062-.13-.114-.19-.163-.106-.087-.193-.032-.278.033z"/></svg>`;
+  }
+}
+
 function getTimezoneGroupInfo(
   tzGroup: string,
   utcOffset = "",
@@ -1547,10 +1566,8 @@ function renderHubTab(snap: HubSnapshot): string {
                  <span class="subtext">${escapeHtml(slot.egress.city ? `${slot.egress.city}, ` : "")}${escapeHtml(slot.egress.country)} &bull; ${slot.egress.latencyMs}ms</span>`
               : `<span class="subtext">${escapeHtml(strings.status.leakUnchecked)}</span>`;
 
-            const iconBadgeText =
-              slot.mode === "adapter_bridge"
-                ? "⚡"
-                : `🌐 ${escapeHtml(slot.countryCode || "")}`;
+            const provName = (slot.provider || (slot.mode === "adapter_bridge" ? "surfshark" : "custom")).toLowerCase();
+            const iconBadgeContent = renderProviderSvg(provName, 18);
 
             const slotTzInfo =
               slot.mode === "userspace_wg" && slot.tzGroup
@@ -1668,11 +1685,14 @@ function renderHubTab(snap: HubSnapshot): string {
             return `
               <div class="surf-card slot-card" data-slot-id="${escapeHtml(slot.id)}">
                 <div class="slot-block-left">
-                  <div class="dark-icon-badge" title="${slot.mode === "adapter_bridge" ? "Adapter Bridge" : "Multi-VPN"}">
-                    ${iconBadgeText}
+                  <div class="dark-icon-badge prov-${escapeHtml(provName)}" title="${slot.mode === "adapter_bridge" ? "Surfshark Adapter Bridge" : escapeHtml(slot.provider || "WireGuard")}">
+                    ${iconBadgeContent}
                   </div>
                   <div class="slot-left-info">
-                    <div class="slot-name">${escapeHtml(slot.name)}</div>
+                    <div class="slot-name" style="display:flex; align-items:center; gap:6px;">
+                      ${slot.countryCode ? renderFlagBadge(slot.countryCode) : ""}
+                      <span>${escapeHtml(slot.name)}</span>
+                    </div>
                     <div class="slot-subtext subtext">
                       <span class="mono">${escapeHtml(slot.listenHost)}:${slot.port}</span>
                       <span class="bullet">&bull;</span>
@@ -2390,7 +2410,8 @@ function renderCatalogTab(snap: HubSnapshot): string {
     .map(
       (pt) => `
       <button type="button" class="pill-tab catalog-provider-tab ${catalogProviderFilter === pt.id ? "active" : ""}" data-provider="${escapeHtml(pt.id)}">
-        ${escapeHtml(pt.label)}
+        ${pt.id === "all" ? '<span style="font-size:12px;">🌐</span>' : renderProviderSvg(pt.id, 14, "prov-tab-svg")}
+        <span>${escapeHtml(pt.label)}</span>
       </button>
     `
     )
@@ -2429,8 +2450,14 @@ function renderCatalogTab(snap: HubSnapshot): string {
           </div>
         </div>
         <div class="loc-card-footer">
-          <span class="mono subtext-sm">[${escapeHtml(provShort)}] ${escapeHtml(loc.connectionName)}</span>
-          <div style="display:flex; gap:6px; align-items:center;">
+          <div style="display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden;">
+            <span class="loc-prov-pill prov-${escapeHtml(loc.provider)}" title="${escapeHtml(loc.provider)}">
+              ${renderProviderSvg(loc.provider, 12)}
+              <span class="mono">${escapeHtml(provShort)}</span>
+            </span>
+            <span class="mono subtext-sm" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(loc.connectionName)}</span>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
             ${
               isCustomLoc
                 ? `<button type="button" class="btn btn-sm btn-danger btn-delete-custom-server" data-provider="${escapeHtml(loc.provider)}" data-loc-id="${escapeHtml(loc.id)}" title="Delete">✕</button>`
@@ -2681,7 +2708,7 @@ function renderProvidersTab(snap: HubSnapshot): string {
           class="provider-menu-item ${isSelected ? "active" : ""}"
           data-select-provider="${escapeHtml(p.provider)}"
         >
-          <div class="provider-logo-badge ${meta.badgeClass}">${escapeHtml(meta.badgeText)}</div>
+          <div class="provider-logo-badge ${meta.badgeClass}">${renderProviderSvg(p.provider, 22)}</div>
           <div class="provider-menu-meta">
             <div class="provider-menu-name">${escapeHtml(p.displayName)}</div>
             <div class="provider-menu-badges">
@@ -2706,7 +2733,7 @@ function renderProvidersTab(snap: HubSnapshot): string {
       <div class="surf-card provider-card provider-detail-card ${p.isReady ? "is-ready" : ""}" data-provider="${escapeHtml(p.provider)}">
         <div class="provider-card-header">
           <div class="provider-brand-row">
-            <div class="provider-logo-badge ${meta.badgeClass}">${escapeHtml(meta.badgeText)}</div>
+            <div class="provider-logo-badge ${meta.badgeClass}" style="width: 48px; height: 48px; border-radius: 12px;">${renderProviderSvg(p.provider, 28)}</div>
             <div>
               <div class="slot-name">${escapeHtml(p.displayName)}</div>
               <div class="subtext-sm" style="display:flex; align-items:center; gap:6px; margin-top:3px; flex-wrap:wrap;">
