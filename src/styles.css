@@ -853,8 +853,8 @@ table.data-table tr:last-child td {
 
 .recommended-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .rec-card {
@@ -914,8 +914,8 @@ table.data-table tr:last-child td {
 
 .locations-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .location-card {

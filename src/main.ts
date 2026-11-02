@@ -184,6 +184,16 @@ let selectedDeckLocationId = "";
 // Selected VPN Provider in the Providers master-detail menu
 let selectedProviderTab: VpnProvider = "surfshark";
 
+// Selected section in the Status & Security master-detail menu
+let selectedStatusSection:
+  | "subsystems"
+  | "killSwitchEnabled"
+  | "dnsLeakProtection"
+  | "ipv6LeakBlock"
+  | "ispIpGuard"
+  | "autoVerifyIp"
+  | "localhostOnly" = "subsystems";
+
 // Modal states
 let isCreateBridgeModalOpen = false;
 let isCreateMultiModalOpen = false;
@@ -231,6 +241,66 @@ export function showToast(message: string, durationMs = 3200): void {
 function renderFlagBadge(countryCode: string): string {
   const code = (countryCode || "UN").toUpperCase();
   return `<span class="flag-badge" aria-label="${escapeHtml(code)}">${escapeHtml(code)}</span>`;
+}
+
+// Brand SVG Logo Avatar for each VPN Provider
+function renderProviderLogoSvg(provider: VpnProvider, badgeClass: string): string {
+  let svgInner = "";
+  switch (provider) {
+    case "surfshark":
+      // Surfshark stylized "S" wave droplet emblem
+      svgInner = `
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+          <path d="M16.8 6.5C15.5 4.8 13.1 4.2 10.6 4.8C8.3 5.4 6.8 7.3 7.1 9.5C7.4 11.5 9.4 12.3 11.8 13C14.3 13.7 16.5 14.6 16.8 16.8C17.1 19.1 15.1 21 12.2 21.3C9.6 21.5 7.4 20.5 6.2 18.7" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="16.8" cy="6.5" r="1.7" fill="#FFFFFF"/>
+        </svg>
+      `;
+      break;
+    case "nordvpn":
+      // NordVPN mountain peaks with inner peak cut-ins
+      svgInner = `
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+          <path d="M3.2 18.5L8.4 8.2L12 14.2L15.4 7.4L20.8 18.5" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M9.6 18.5L12 14.2L14.4 18.5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      `;
+      break;
+    case "mullvad":
+      // Mullvad iconic mole helmet & golden visor emblem
+      svgInner = `
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+          <path d="M5 13C5 8.6 8.1 5.5 12 5.5C15.9 5.5 19 8.6 19 13V15.2H5V13Z" fill="#FFD54F"/>
+          <rect x="4" y="13.5" width="16" height="2.4" rx="1.2" fill="#FFFFFF"/>
+          <circle cx="12" cy="9.5" r="2.2" fill="#1E293B"/>
+          <circle cx="12" cy="9.5" r="1" fill="#FFF59D"/>
+          <path d="M8.2 17.5C9.3 18.8 10.6 19.3 12 19.3C13.4 19.3 14.7 18.8 15.8 17.5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      `;
+      break;
+    case "protonvpn":
+      // ProtonVPN orbital triangle shield
+      svgInner = `
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+          <path d="M6.2 6.8L18.2 9.4L11.4 19.2L6.2 6.8Z" stroke="#FFFFFF" stroke-width="2.1" stroke-linejoin="round"/>
+          <circle cx="6.2" cy="6.8" r="2.1" fill="#FFFFFF"/>
+          <circle cx="18.2" cy="9.4" r="2.1" fill="#FFFFFF"/>
+          <circle cx="11.4" cy="19.2" r="2.1" fill="#A5B4FC"/>
+        </svg>
+      `;
+      break;
+    case "custom":
+    default:
+      // WireGuard concentric dragon/tunnel node rings
+      svgInner = `
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="7.5" stroke="#FFFFFF" stroke-width="2.1" stroke-dasharray="11 4"/>
+          <circle cx="12" cy="12" r="3.5" fill="#F87171"/>
+          <path d="M12 4.5V2M12 22V19.5M4.5 12H2M22 12H19.5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      `;
+      break;
+  }
+  return `<div class="provider-logo-badge ${escapeHtml(badgeClass)}">${svgInner}</div>`;
 }
 
 function getTimezoneGroupInfo(
@@ -2004,7 +2074,7 @@ function renderHubTab(snap: HubSnapshot): string {
   `;
 }
 
-// 2b. View 1b: Status & Security Protections Tab
+// 2b. View 1b: Status & Security Protections Tab (Master-Detail Two-Column Menu)
 function renderStatusTab(snap: HubSnapshot): string {
   const strings = getStrings();
   const sp = strings.statusPage;
@@ -2015,179 +2085,290 @@ function renderStatusTab(snap: HubSnapshot): string {
 
   const features = [
     {
-      id: "killSwitchEnabled",
+      id: "killSwitchEnabled" as const,
       enabled: s.killSwitchEnabled,
       title: sp.killSwitchTitle,
       desc: sp.killSwitchDesc,
       badge: "IP_UNICAST_IF / IP_BOUND_IF",
+      icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
     },
     {
-      id: "dnsLeakProtection",
+      id: "dnsLeakProtection" as const,
       enabled: s.dnsLeakProtection,
       title: sp.dnsLeakTitle,
       desc: sp.dnsLeakDesc,
       badge: "RFC 1035 Tunnel DNS",
+      icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
     },
     {
-      id: "ipv6LeakBlock",
+      id: "ipv6LeakBlock" as const,
       enabled: s.ipv6LeakBlock,
       title: sp.ipv6BlockTitle,
       desc: sp.ipv6BlockDesc,
       badge: "IPv4-Only Lock",
+      icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
     },
     {
-      id: "ispIpGuard",
+      id: "ispIpGuard" as const,
       enabled: s.ispIpGuard,
       title: sp.ispGuardTitle,
       desc: sp.ispGuardDesc,
       badge: snap.hostIspIp ? `ISP: ${snap.hostIspIp}` : "ISP Baseline",
+      icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
     },
     {
-      id: "autoVerifyIp",
+      id: "autoVerifyIp" as const,
       enabled: s.autoVerifyIp,
       title: sp.autoVerifyTitle,
       desc: sp.autoVerifyDesc,
       badge: "Auto Probe",
+      icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
     },
     {
-      id: "localhostOnly",
+      id: "localhostOnly" as const,
       enabled: !s.allowLan,
       title: sp.localhostOnlyTitle,
       desc: sp.localhostOnlyDesc,
       badge: !s.allowLan ? "127.0.0.1" : "0.0.0.0 (LAN)",
+      icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>`,
     },
   ];
 
-  const allActive = features.every((f) => f.enabled);
+  const activeCount = features.filter((f) => f.enabled).length;
+  const allActive = activeCount === features.length;
 
-  const featureCardsHtml = features
-    .map(
-      (f) => `
-      <div class="surf-card security-card ${f.enabled ? "is-enabled" : "is-disabled"}">
-        <div class="security-card-info">
-          <div class="security-card-header">
-            <span class="security-card-title">${escapeHtml(f.title)}</span>
-            <span class="badge ${f.enabled ? "badge-running" : "badge-kill"}">
-              ${escapeHtml(f.enabled ? sp.stateOn : sp.stateOff)}
-            </span>
-            <span class="badge badge-os mono">${escapeHtml(f.badge)}</span>
-          </div>
-          <div class="subtext">${escapeHtml(f.desc)}</div>
+  // Left Column: Status & Security Master Menu
+  const menuItemsHtml = [
+    `
+      <button
+        type="button"
+        class="provider-menu-item ${selectedStatusSection === "subsystems" ? "active" : ""}"
+        data-select-status="subsystems"
+      >
+        <div class="provider-logo-badge ${allActive ? "prov-surfshark" : "prov-custom"}">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
         </div>
-        <div class="security-toggle-col">
-          <label class="toggle-switch" title="${escapeHtml(f.title)}">
-            <input
-              type="checkbox"
-              class="security-toggle-input"
-              data-feature="${escapeHtml(f.id)}"
-              ${f.enabled ? "checked" : ""}
-            />
-            <span class="toggle-slider"></span>
-          </label>
+        <div class="provider-menu-meta">
+          <div class="provider-menu-name">${escapeHtml(sp.subsystemSectionTitle)}</div>
+          <div class="provider-menu-badges">
+            <span class="status-dot ${allActive ? "dot-online" : "dot-warning"}"></span>
+            <span class="provider-menu-sub">${activeCount}/6 ${escapeHtml(sp.stateOn)}</span>
+          </div>
+        </div>
+        <span class="provider-menu-chevron">›</span>
+      </button>
+    `,
+    ...features.map(
+      (f) => `
+      <button
+        type="button"
+        class="provider-menu-item ${selectedStatusSection === f.id ? "active" : ""}"
+        data-select-status="${escapeHtml(f.id)}"
+      >
+        <div class="provider-logo-badge ${f.enabled ? "prov-surfshark" : "prov-custom"}">
+          ${f.icon}
+        </div>
+        <div class="provider-menu-meta">
+          <div class="provider-menu-name">${escapeHtml(f.title)}</div>
+          <div class="provider-menu-badges">
+            <span class="status-dot ${f.enabled ? "dot-online" : "dot-offline"}"></span>
+            <span class="provider-menu-sub mono">${escapeHtml(f.enabled ? sp.stateOn : sp.stateOff)} &bull; ${escapeHtml(f.badge)}</span>
+          </div>
+        </div>
+        <span class="provider-menu-chevron">›</span>
+      </button>
+    `
+    ),
+  ].join("");
+
+  // Right Column: Selected Status / Security Detail Card
+  const selectedFeature = features.find((f) => f.id === selectedStatusSection);
+  let detailPaneHtml = "";
+
+  if (!selectedFeature) {
+    detailPaneHtml = `
+      <div class="surf-card provider-card provider-detail-card">
+        <div class="provider-card-header">
+          <div class="provider-brand-row">
+            <div class="provider-logo-badge ${allActive ? "prov-surfshark" : "prov-custom"}">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+            </div>
+            <div>
+              <div class="slot-name">${escapeHtml(sp.subsystemSectionTitle)}</div>
+              <div class="subtext-sm" style="display:flex; align-items:center; gap:6px; margin-top:3px; flex-wrap:wrap;">
+                <span class="badge ${allActive ? "badge-running" : "badge-kill"}">
+                  ${activeCount}/6 ${escapeHtml(sp.stateOn)}
+                </span>
+                <span class="badge badge-os mono">${s.allowLan ? "0.0.0.0" : "127.0.0.1"}:${s.basePort}+</span>
+              </div>
+            </div>
+          </div>
+          <div class="btn-group-sm">
+            ${
+              !allActive
+                ? `<button type="button" class="btn btn-sm btn-primary" id="btn-reset-all-security">
+                     ${escapeHtml(sp.resetDefaultsBtn)}
+                   </button>`
+                : ""
+            }
+            <button type="button" class="btn btn-sm btn-secondary" id="btn-status-refresh">
+              ⟳ ${escapeHtml(sp.refreshStatusBtn)}
+            </button>
+          </div>
+        </div>
+
+        <div class="subtext">
+          ${escapeHtml(allActive ? sp.allProtectionsDesc : sp.customProtectionDesc)}
+        </div>
+
+        <div class="subsystem-grid">
+          <div class="surf-card subsystem-card" style="background-color:#F5F7FA;">
+            <div class="subsystem-card-top">
+              <span class="subsystem-card-label">${escapeHtml(sp.vpnAdapterCardTitle)}</span>
+              <span class="status-dot ${isSurfConnected ? "dot-online" : "dot-offline"}"></span>
+            </div>
+            <div class="subsystem-card-value mono">
+              ${isSurfConnected ? escapeHtml(surf?.ipv4 || "") : escapeHtml(strings.header.disconnected)}
+            </div>
+            <div class="subtext-sm">
+              ${escapeHtml(surf?.description || "Surfshark Wintun / utun / OpenVPN")}
+            </div>
+          </div>
+
+          <div class="surf-card subsystem-card" style="background-color:#F5F7FA;">
+            <div class="subsystem-card-top">
+              <span class="subsystem-card-label">${escapeHtml(sp.ispGuardCardTitle)}</span>
+              <span class="status-dot ${snap.hostIspIp ? "dot-online" : "dot-warning"}"></span>
+            </div>
+            <div class="subsystem-card-value mono">
+              ${escapeHtml(snap.hostIspIp || "Detecting...")}
+            </div>
+            <div class="subtext-sm">
+              ${s.ispIpGuard ? escapeHtml(sp.stateOn) : escapeHtml(sp.stateOff)}
+            </div>
+          </div>
+
+          <div class="surf-card subsystem-card" style="background-color:#F5F7FA;">
+            <div class="subsystem-card-top">
+              <span class="subsystem-card-label">${escapeHtml(sp.wireguardEngineCardTitle)}</span>
+              <span class="status-dot ${s.wireproxyReady && s.hasWgPrivateKey ? "dot-online" : "dot-warning"}"></span>
+            </div>
+            <div class="subsystem-card-value">
+              ${s.wireproxyReady ? escapeHtml(strings.header.ready) : escapeHtml(strings.header.missing)}
+            </div>
+            <div class="subtext-sm">
+              ${escapeHtml(s.hasWgPrivateKey ? sp.keyConfigured : sp.keyNotSet)}
+            </div>
+          </div>
+
+          <div class="surf-card subsystem-card" style="background-color:#F5F7FA;">
+            <div class="subsystem-card-top">
+              <span class="subsystem-card-label">${escapeHtml(sp.proxyHubCardTitle)}</span>
+              <span class="status-dot ${runningSlots > 0 ? "dot-online" : "dot-warning"}"></span>
+            </div>
+            <div class="subsystem-card-value">
+              ${escapeHtml(
+                sp.activeSlotsCount
+                  .replace("{running}", String(runningSlots))
+                  .replace("{total}", String(snap.slots.length))
+              )}
+            </div>
+            <div class="subtext-sm mono">
+              ${s.allowLan ? "0.0.0.0" : "127.0.0.1"}:${s.basePort}+
+            </div>
+          </div>
         </div>
       </div>
-    `
-    )
-    .join("");
+    `;
+  } else {
+    const f = selectedFeature;
+    detailPaneHtml = `
+      <div class="surf-card provider-card provider-detail-card ${f.enabled ? "is-ready" : ""}">
+        <div class="provider-card-header">
+          <div class="provider-brand-row">
+            <div class="provider-logo-badge ${f.enabled ? "prov-surfshark" : "prov-custom"}">
+              ${f.icon}
+            </div>
+            <div>
+              <div class="slot-name">${escapeHtml(f.title)}</div>
+              <div class="subtext-sm" style="display:flex; align-items:center; gap:6px; margin-top:3px; flex-wrap:wrap;">
+                <span class="badge ${f.enabled ? "badge-running" : "badge-kill"}">
+                  ${escapeHtml(f.enabled ? sp.stateOn : sp.stateOff)}
+                </span>
+                <span class="badge badge-os mono">${escapeHtml(f.badge)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="security-toggle-col">
+            <label class="toggle-switch" title="${escapeHtml(f.title)}">
+              <input
+                type="checkbox"
+                class="security-toggle-input"
+                data-feature="${escapeHtml(f.id)}"
+                ${f.enabled ? "checked" : ""}
+              />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="subtext" style="font-size:13.5px; line-height:1.55;">
+          ${escapeHtml(f.desc)}
+        </div>
+
+        <div class="provider-actions-row">
+          <div class="btn-group-sm">
+            <button
+              type="button"
+              class="btn btn-sm ${f.enabled ? "btn-danger" : "btn-primary"} btn-status-detail-toggle"
+              data-feature="${escapeHtml(f.id)}"
+              data-enable="${!f.enabled}"
+            >
+              ${
+                f.enabled
+                  ? currentLanguage === "vi"
+                    ? "Tắt lớp bảo vệ này (OFF)"
+                    : "Disable Protection (OFF)"
+                  : currentLanguage === "vi"
+                    ? "Bật lớp bảo vệ này (ON)"
+                    : "Enable Protection (ON)"
+              }
+            </button>
+            ${
+              !allActive
+                ? `<button type="button" class="btn btn-sm btn-secondary" id="btn-reset-all-security">
+                     ${escapeHtml(sp.resetDefaultsBtn)}
+                   </button>`
+                : ""
+            }
+          </div>
+          <button type="button" class="btn btn-sm btn-secondary" id="btn-status-refresh">
+            ⟳ ${escapeHtml(sp.refreshStatusBtn)}
+          </button>
+        </div>
+      </div>
+    `;
+  }
 
   return `
-    <!-- Top Overall Security Shield Banner -->
-    <div class="surf-card status-shield-banner">
-      <div class="shield-banner-left">
-        <div class="shield-badge-icon ${allActive ? "shield-badge-safe" : "shield-badge-warn"}">
-          ${allActive ? "🛡" : "⚠"}
-        </div>
-        <div class="shield-banner-meta">
-          <div class="shield-banner-title">
-            ${escapeHtml(allActive ? sp.allProtectionsActive : sp.customProtectionMode)}
-          </div>
-          <div class="subtext">
-            ${escapeHtml(allActive ? sp.allProtectionsDesc : sp.customProtectionDesc)}
-          </div>
-        </div>
+    <div class="settings-view">
+      <div class="settings-header-banner">
+        <h2 class="section-title" style="margin-bottom:4px;">${escapeHtml(sp.protectionsSectionTitle)}</h2>
+        <div class="subtext">${escapeHtml(sp.subtitle)}</div>
       </div>
-      <div class="btn-group-sm">
-        ${
-          !allActive
-            ? `<button type="button" class="btn btn-primary" id="btn-reset-all-security">
-                 ${escapeHtml(sp.resetDefaultsBtn)}
-               </button>`
-            : ""
-        }
-        <button type="button" class="btn btn-secondary" id="btn-status-refresh">
-          ⟳ ${escapeHtml(sp.refreshStatusBtn)}
-        </button>
-      </div>
-    </div>
 
-    <!-- Live Subsystem Health Grid -->
-    <div class="slots-section">
-      <div class="section-title-sm">${escapeHtml(sp.subsystemSectionTitle)}</div>
-      <div class="subsystem-grid">
-        <div class="surf-card subsystem-card">
-          <div class="subsystem-card-top">
-            <span class="subsystem-card-label">${escapeHtml(sp.vpnAdapterCardTitle)}</span>
-            <span class="status-dot ${isSurfConnected ? "dot-online" : "dot-offline"}"></span>
-          </div>
-          <div class="subsystem-card-value mono">
-            ${isSurfConnected ? escapeHtml(surf?.ipv4 || "") : escapeHtml(strings.header.disconnected)}
-          </div>
-          <div class="subtext-sm">
-            ${escapeHtml(surf?.description || "Surfshark Wintun / utun / OpenVPN")}
-          </div>
+      <div class="providers-master-detail">
+        <div class="providers-menu-col" role="tablist" aria-label="Status & Security Protections">
+          ${menuItemsHtml}
         </div>
-
-        <div class="surf-card subsystem-card">
-          <div class="subsystem-card-top">
-            <span class="subsystem-card-label">${escapeHtml(sp.ispGuardCardTitle)}</span>
-            <span class="status-dot ${snap.hostIspIp ? "dot-online" : "dot-warning"}"></span>
-          </div>
-          <div class="subsystem-card-value mono">
-            ${escapeHtml(snap.hostIspIp || "Detecting...")}
-          </div>
-          <div class="subtext-sm">
-            ${s.ispIpGuard ? escapeHtml(sp.stateOn) : escapeHtml(sp.stateOff)}
-          </div>
+        <div class="providers-detail-col">
+          ${detailPaneHtml}
         </div>
-
-        <div class="surf-card subsystem-card">
-          <div class="subsystem-card-top">
-            <span class="subsystem-card-label">${escapeHtml(sp.wireguardEngineCardTitle)}</span>
-            <span class="status-dot ${s.wireproxyReady && s.hasWgPrivateKey ? "dot-online" : "dot-warning"}"></span>
-          </div>
-          <div class="subsystem-card-value">
-            ${s.wireproxyReady ? escapeHtml(strings.header.ready) : escapeHtml(strings.header.missing)}
-          </div>
-          <div class="subtext-sm">
-            ${escapeHtml(s.hasWgPrivateKey ? sp.keyConfigured : sp.keyNotSet)}
-          </div>
-        </div>
-
-        <div class="surf-card subsystem-card">
-          <div class="subsystem-card-top">
-            <span class="subsystem-card-label">${escapeHtml(sp.proxyHubCardTitle)}</span>
-            <span class="status-dot ${runningSlots > 0 ? "dot-online" : "dot-warning"}"></span>
-          </div>
-          <div class="subsystem-card-value">
-            ${escapeHtml(
-              sp.activeSlotsCount
-                .replace("{running}", String(runningSlots))
-                .replace("{total}", String(snap.slots.length))
-            )}
-          </div>
-          <div class="subtext-sm mono">
-            ${s.allowLan ? "0.0.0.0" : "127.0.0.1"}:${s.basePort}+
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Interactive Security Toggles Grid -->
-    <div class="slots-section">
-      <h2 class="section-title" style="margin-bottom: 4px;">${escapeHtml(sp.protectionsSectionTitle)}</h2>
-      <div class="subtext" style="margin-bottom: 10px;">${escapeHtml(sp.subtitle)}</div>
-      <div class="security-grid">
-        ${featureCardsHtml}
       </div>
     </div>
   `;
@@ -2673,7 +2854,7 @@ function renderProvidersTab(snap: HubSnapshot): string {
           class="provider-menu-item ${isSelected ? "active" : ""}"
           data-select-provider="${escapeHtml(p.provider)}"
         >
-          <div class="provider-logo-badge ${meta.badgeClass}">${escapeHtml(meta.badgeText)}</div>
+          ${renderProviderLogoSvg(p.provider, meta.badgeClass)}
           <div class="provider-menu-meta">
             <div class="provider-menu-name">${escapeHtml(p.displayName)}</div>
             <div class="provider-menu-badges">
@@ -2698,7 +2879,7 @@ function renderProvidersTab(snap: HubSnapshot): string {
       <div class="surf-card provider-card provider-detail-card ${p.isReady ? "is-ready" : ""}" data-provider="${escapeHtml(p.provider)}">
         <div class="provider-card-header">
           <div class="provider-brand-row">
-            <div class="provider-logo-badge ${meta.badgeClass}">${escapeHtml(meta.badgeText)}</div>
+            ${renderProviderLogoSvg(p.provider, meta.badgeClass)}
             <div>
               <div class="slot-name">${escapeHtml(p.displayName)}</div>
               <div class="subtext-sm" style="display:flex; align-items:center; gap:6px; margin-top:3px; flex-wrap:wrap;">
@@ -3412,7 +3593,7 @@ function render(): void {
       break;
   }
 
-  const showRightDeck = activeTab === "hub" || activeTab === "catalog";
+  const showRightDeck = activeTab === "hub";
 
   app.innerHTML = `
     <div class="app-shell">
@@ -3461,7 +3642,17 @@ function attachEventListeners(): void {
     });
   });
 
-  // Status tab: Security toggle switches
+  // Status tab: Master-Detail menu item click & Security toggle switches
+  document.querySelectorAll<HTMLButtonElement>(".provider-menu-item[data-select-status]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const sec = btn.getAttribute("data-select-status") as typeof selectedStatusSection | null;
+      if (sec) {
+        selectedStatusSection = sec;
+        render();
+      }
+    });
+  });
+
   document.querySelectorAll<HTMLInputElement>(".security-toggle-input").forEach((input) => {
     input.addEventListener("change", () => {
       const feature = input.getAttribute("data-feature");
@@ -3471,6 +3662,19 @@ function attachEventListeners(): void {
         void handleToggleSecurityFeature("allowLan", !input.checked);
       } else {
         void handleToggleSecurityFeature(feature, input.checked);
+      }
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>(".btn-status-detail-toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const feature = btn.getAttribute("data-feature");
+      const enable = btn.getAttribute("data-enable") === "true";
+      if (!feature) return;
+      if (feature === "localhostOnly") {
+        void handleToggleSecurityFeature("allowLan", !enable);
+      } else {
+        void handleToggleSecurityFeature(feature, enable);
       }
     });
   });
