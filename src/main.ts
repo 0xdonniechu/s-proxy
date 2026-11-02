@@ -243,64 +243,34 @@ function renderFlagBadge(countryCode: string): string {
   return `<span class="flag-badge" aria-label="${escapeHtml(code)}">${escapeHtml(code)}</span>`;
 }
 
-// Brand SVG Logo Avatar for each VPN Provider
+// Official Provider Homepage Logo Avatar for each VPN Provider
 function renderProviderLogoSvg(provider: VpnProvider, badgeClass: string): string {
-  let svgInner = "";
+  let logoPath = "/providers/wireguard.png";
+  let altText = "WireGuard";
   switch (provider) {
     case "surfshark":
-      // Surfshark stylized "S" wave droplet emblem
-      svgInner = `
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
-          <path d="M16.8 6.5C15.5 4.8 13.1 4.2 10.6 4.8C8.3 5.4 6.8 7.3 7.1 9.5C7.4 11.5 9.4 12.3 11.8 13C14.3 13.7 16.5 14.6 16.8 16.8C17.1 19.1 15.1 21 12.2 21.3C9.6 21.5 7.4 20.5 6.2 18.7" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>
-          <circle cx="16.8" cy="6.5" r="1.7" fill="#FFFFFF"/>
-        </svg>
-      `;
+      logoPath = "/providers/surfshark.png";
+      altText = "Surfshark";
       break;
     case "nordvpn":
-      // NordVPN mountain peaks with inner peak cut-ins
-      svgInner = `
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
-          <path d="M3.2 18.5L8.4 8.2L12 14.2L15.4 7.4L20.8 18.5" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M9.6 18.5L12 14.2L14.4 18.5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      `;
+      logoPath = "/providers/nordvpn.png";
+      altText = "NordVPN";
       break;
     case "mullvad":
-      // Mullvad iconic mole helmet & golden visor emblem
-      svgInner = `
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
-          <path d="M5 13C5 8.6 8.1 5.5 12 5.5C15.9 5.5 19 8.6 19 13V15.2H5V13Z" fill="#FFD54F"/>
-          <rect x="4" y="13.5" width="16" height="2.4" rx="1.2" fill="#FFFFFF"/>
-          <circle cx="12" cy="9.5" r="2.2" fill="#1E293B"/>
-          <circle cx="12" cy="9.5" r="1" fill="#FFF59D"/>
-          <path d="M8.2 17.5C9.3 18.8 10.6 19.3 12 19.3C13.4 19.3 14.7 18.8 15.8 17.5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-      `;
+      logoPath = "/providers/mullvad.png";
+      altText = "Mullvad VPN";
       break;
     case "protonvpn":
-      // ProtonVPN orbital triangle shield
-      svgInner = `
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
-          <path d="M6.2 6.8L18.2 9.4L11.4 19.2L6.2 6.8Z" stroke="#FFFFFF" stroke-width="2.1" stroke-linejoin="round"/>
-          <circle cx="6.2" cy="6.8" r="2.1" fill="#FFFFFF"/>
-          <circle cx="18.2" cy="9.4" r="2.1" fill="#FFFFFF"/>
-          <circle cx="11.4" cy="19.2" r="2.1" fill="#A5B4FC"/>
-        </svg>
-      `;
+      logoPath = "/providers/protonvpn.png";
+      altText = "ProtonVPN";
       break;
     case "custom":
     default:
-      // WireGuard concentric dragon/tunnel node rings
-      svgInner = `
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
-          <circle cx="12" cy="12" r="7.5" stroke="#FFFFFF" stroke-width="2.1" stroke-dasharray="11 4"/>
-          <circle cx="12" cy="12" r="3.5" fill="#F87171"/>
-          <path d="M12 4.5V2M12 22V19.5M4.5 12H2M22 12H19.5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-      `;
+      logoPath = "/providers/wireguard.png";
+      altText = "WireGuard";
       break;
   }
-  return `<div class="provider-logo-badge ${escapeHtml(badgeClass)}">${svgInner}</div>`;
+  return `<div class="provider-logo-badge has-brand-img ${escapeHtml(badgeClass)}"><img class="provider-logo-img" src="${escapeHtml(logoPath)}" alt="${escapeHtml(altText)}" loading="eager" decoding="async" /></div>`;
 }
 
 function getTimezoneGroupInfo(
@@ -2374,9 +2344,10 @@ function renderStatusTab(snap: HubSnapshot): string {
   `;
 }
 
-// 3. View 2: Locations Tab (Multi-Provider Catalog)
+// 3. View 2: Locations Tab (Multi-Provider Catalog — Master-Detail Two-Column Menu)
 function renderCatalogTab(snap: HubSnapshot): string {
   const strings = getStrings();
+  const isVi = currentLanguage === "vi";
   const sysTzInfo = detectSystemTimezoneInfo();
 
   // Available timezone groups for the active provider filter
@@ -2389,7 +2360,7 @@ function renderCatalogTab(snap: HubSnapshot): string {
     totalForProvider += 1;
   }
 
-  // Put host machine's timezone group first in the dropdown list, followed by other available groups
+  // Put host machine's timezone group first in the left menu, followed by other available groups
   const availableTzGroups = ORDERED_TZ_GROUPS.filter(
     (g) => (tzCounts.get(g) || 0) > 0 || g === sysTzInfo.tzGroup
   );
@@ -2467,15 +2438,15 @@ function renderCatalogTab(snap: HubSnapshot): string {
   const geoClusterSelectHtml =
     clusterMap.size > 1
       ? `<select id="catalog-cluster-select" class="select-input catalog-tz-select" title="${
-          currentLanguage === "vi"
+          isVi
             ? "Lọc theo cụm địa lý gần nhau để tránh nền tảng phát hiện Impossible Travel khi đổi proxy"
             : "Filter by realistic geographic proximity cluster to prevent Impossible Travel detection"
         }">
           <option value="all" ${effectiveClusterFilter === "all" ? "selected" : ""}>
             ${escapeHtml(
-              currentLanguage === "vi"
-                ? `🛡 Tất cả cụm địa lý trong múi giờ (${clusterMap.size} cụm — Đã tách chống Impossible Travel)`
-                : `🛡 All Geo-Clusters in Timezone (${clusterMap.size} clusters — Separated against Impossible Travel)`
+              isVi
+                ? `🛡 Tất cả cụm địa lý (${clusterMap.size} cụm — Đã tách chống Impossible Travel)`
+                : `🛡 All Geo-Clusters (${clusterMap.size} clusters — Separated against Impossible Travel)`
             )}
           </option>
           ${Array.from(clusterMap.entries())
@@ -2489,31 +2460,86 @@ function renderCatalogTab(snap: HubSnapshot): string {
         </select>`
       : "";
 
-  const tzSelectOptionsHtml = [
+  const tzFlagMap: Record<string, string> = {
+    asia_utc7: "VN",
+    asia_utc8: "SG",
+    asia_utc9: "JP",
+    us_east: "US",
+    us_central: "US",
+    us_mountain: "US",
+    us_west: "US",
+    eu_west: "GB",
+    eu_central: "DE",
+    au_east: "AU",
+    custom: "WG",
+  };
+
+  // Left Column Menu Items: Timezone & Region Groups
+  const tzMenuItemsHtml = [
     ...orderedTzGroups.map((g) => {
       const info = getTimezoneGroupInfo(g);
       const count = tzCounts.get(g) || 0;
       const isSystemTz = g === sysTzInfo.tzGroup;
-      const sysSuffix = isSystemTz
-        ? currentLanguage === "vi"
-          ? " ★ Múi giờ máy đang dùng (Mặc định)"
-          : " ★ System Timezone (Default)"
-        : "";
-      return `<option value="${escapeHtml(g)}" ${effectiveTzFilter === g ? "selected" : ""}>
-        ${escapeHtml(`${info.groupLabel} — ${count} proxy${sysSuffix}`)}
-      </option>`;
+      const isSelected = effectiveTzFilter === g;
+      const flagCode = tzFlagMap[g] || "UN";
+      const cleanTitle = info.shortPill.replace(/^[^\s]+\s+/, "");
+      const subText = isSystemTz
+        ? isVi
+          ? `${count} máy chủ • Múi giờ máy`
+          : `${count} servers • System TZ`
+        : isVi
+          ? `${count} máy chủ`
+          : `${count} servers`;
+
+      return `
+        <button
+          type="button"
+          class="provider-menu-item catalog-tz-menu-item ${isSelected ? "active" : ""}"
+          data-tz-group="${escapeHtml(g)}"
+          title="${escapeHtml(info.groupLabel)}"
+        >
+          <div class="provider-logo-badge ${isSystemTz ? "prov-surfshark" : "prov-mullvad"}" style="font-size:11px;">
+            ${escapeHtml(flagCode)}
+          </div>
+          <div class="provider-menu-meta">
+            <div class="provider-menu-name">${escapeHtml(cleanTitle)}</div>
+            <div class="provider-menu-badges">
+              <span class="status-dot ${count > 0 ? "dot-online" : "dot-warning"}"></span>
+              <span class="provider-menu-sub">${escapeHtml(subText)}</span>
+            </div>
+          </div>
+          <span class="provider-menu-chevron">›</span>
+        </button>
+      `;
     }),
-    `<option value="all" ${effectiveTzFilter === "all" ? "selected" : ""}>
-      ${escapeHtml(
-        currentLanguage === "vi"
-          ? `🌐 Hiển thị tất cả múi giờ (${totalForProvider} proxy)`
-          : `🌐 Show All Timezones (${totalForProvider} proxies)`
-      )}
-    </option>`,
+    `
+      <button
+        type="button"
+        class="provider-menu-item catalog-tz-menu-item ${effectiveTzFilter === "all" ? "active" : ""}"
+        data-tz-group="all"
+      >
+        <div class="provider-logo-badge prov-custom" style="font-size:11px;">ALL</div>
+        <div class="provider-menu-meta">
+          <div class="provider-menu-name">${escapeHtml(isVi ? "Tất cả múi giờ" : "All Timezones")}</div>
+          <div class="provider-menu-badges">
+            <span class="status-dot dot-online"></span>
+            <span class="provider-menu-sub">${escapeHtml(isVi ? `${totalForProvider} máy chủ` : `${totalForProvider} servers`)}</span>
+          </div>
+        </div>
+        <span class="provider-menu-chevron">›</span>
+      </button>
+    `,
   ].join("");
 
-  const sysTzGroupMeta = getTimezoneGroupInfo(sysTzInfo.tzGroup);
-  const isUsingSystemTz = effectiveTzFilter === sysTzInfo.tzGroup;
+  const activeTzMeta =
+    effectiveTzFilter === "all"
+      ? {
+          groupLabel: isVi
+            ? `🌐 Tất cả múi giờ (${totalForProvider} máy chủ)`
+            : `🌐 All Timezones (${totalForProvider} servers)`,
+          tzBadge: "Global Multi-Region Catalog",
+        }
+      : getTimezoneGroupInfo(effectiveTzFilter);
 
   // Recommended top 2 lowest-load servers within the same safe Geo-Cluster (Impossible Travel Guard)
   let primaryRecLoc: SurfsharkLocation | null = null;
@@ -2639,9 +2665,9 @@ function renderCatalogTab(snap: HubSnapshot): string {
     }
     for (const [, group] of byCluster.entries()) {
       const countLabel =
-        currentLanguage === "vi"
-          ? `${group.locs.length} proxy trong cụm địa lý hợp lý (Chống Impossible Travel)`
-          : `${group.locs.length} proxies in safe geo-cluster (Impossible Travel Guard)`;
+        isVi
+          ? `${group.locs.length} proxy trong cụm địa lý hợp lý`
+          : `${group.locs.length} proxies in safe geo-cluster`;
       groupedSectionsHtml += `
         <div class="locations-section" style="margin-bottom: 18px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:6px;">
@@ -2658,135 +2684,120 @@ function renderCatalogTab(snap: HubSnapshot): string {
   }
 
   const primaryRecTitle =
-    currentLanguage === "vi"
-      ? "Máy chủ tối ưu nhất trong cụm địa lý (#1)"
-      : "Best Server in Geo-Cluster (#1)";
+    isVi
+      ? "Máy chủ tối ưu nhất trong cụm (#1)"
+      : "Best Server in Cluster (#1)";
   const backupRecTitle =
-    currentLanguage === "vi"
-      ? "Dự phòng an toàn cùng cụm (< 850 km • Chống Impossible Travel)"
-      : "Safe Same-Cluster Failover (< 850 km • Impossible Travel Guard)";
+    isVi
+      ? "Dự phòng an toàn cùng cụm (< 850 km)"
+      : "Safe Same-Cluster Failover (< 850 km)";
 
   return `
-    <!-- Multi-Provider Filter Bar -->
-    <div class="provider-filter-bar">
-      <div class="pill-tabs" role="tablist">
-        ${providerTabsHtml}
-      </div>
-    </div>
-
-    <!-- Timezone & Geo-Proximity Dropdown Selector Card (Defaults to Host System Timezone) -->
-    <div class="surf-card tz-dropdown-bar">
-      <div class="tz-dropdown-left">
-        <label for="catalog-tz-select" class="tz-dropdown-label">
-          🕒 ${escapeHtml(currentLanguage === "vi" ? "Chọn Múi Giờ & Cụm Địa Lý Hợp Lý:" : "Select Timezone & Safe Geo-Cluster:")}
-        </label>
-        <div class="subtext-sm">
-          ${escapeHtml(
-            currentLanguage === "vi"
-              ? `Mặc định theo múi giờ máy (${sysTzGroupMeta.tzBadge}) • Tách cụm khoảng cách thật để chống nền tảng detect Impossible Travel`
-              : `Defaults to system timezone (${sysTzGroupMeta.tzBadge}) • Separated by real-world distance against Impossible Travel detection`
-          )}
+    <div class="settings-view">
+      <div class="settings-header-banner" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+        <div>
+          <h2 class="section-title" style="margin-bottom:4px;">${escapeHtml(isVi ? "Máy chủ VPN theo Múi giờ & Cụm địa lý" : "VPN Locations by Timezone & Geo-Cluster")}</h2>
+          <div class="subtext">${escapeHtml(activeTzMeta.groupLabel)}</div>
+        </div>
+        <div class="pill-tabs" role="tablist">
+          ${providerTabsHtml}
         </div>
       </div>
-      <div class="tz-dropdown-controls">
-        <select id="catalog-tz-select" class="select-input catalog-tz-select">
-          ${tzSelectOptionsHtml}
-        </select>
-        ${geoClusterSelectHtml}
-        ${
-          !isUsingSystemTz
-            ? `<button type="button" class="btn btn-secondary btn-sm" id="btn-reset-system-tz" title="${escapeHtml(sysTzGroupMeta.groupLabel)}">
-                 ↺ ${escapeHtml(currentLanguage === "vi" ? `Về múi giờ máy (${sysTzInfo.utcOffsetLabel})` : `System Timezone (${sysTzInfo.utcOffsetLabel})`)}
-               </button>`
-            : `<span class="badge badge-running mono">🖥 ${escapeHtml(currentLanguage === "vi" ? `Múi giờ máy (${sysTzInfo.utcOffsetLabel})` : `System TZ (${sysTzInfo.utcOffsetLabel})`)}</span>`
-        }
-      </div>
-    </div>
 
-    <!-- Top Search & Filter Bar -->
-    <div class="catalog-top-row">
-      <div class="search-box">
-        <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#5E6675" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
-        <input
-          type="search"
-          id="catalog-search-input"
-          class="search-input"
-          placeholder="${escapeHtml(strings.catalog.searchPlaceholder)}"
-          value="${escapeHtml(catalogSearchQuery)}"
-        />
-      </div>
-
-      <div class="pill-tabs" role="tablist">
-        <button type="button" class="pill-tab catalog-pill-tab ${catalogFilterType === "all" ? "active" : ""}" data-filter="all">
-          ${escapeHtml(strings.catalog.filterAll)}
-        </button>
-        <button type="button" class="pill-tab catalog-pill-tab ${catalogFilterType === "generic" ? "active" : ""}" data-filter="generic">
-          ${escapeHtml(strings.catalog.genericType)}
-        </button>
-        <button type="button" class="pill-tab catalog-pill-tab ${catalogFilterType === "static" ? "active" : ""}" data-filter="static">
-          ${escapeHtml(strings.catalog.filterStatic)}
-        </button>
-      </div>
-
-      <div class="catalog-count-badge">
-        ${escapeHtml(
-          currentLanguage === "vi"
-            ? `Đang có ${filtered.length} proxy khả dụng trong múi giờ này`
-            : `Showing ${filtered.length} available proxies in selected timezone`
-        )}
-      </div>
-    </div>
-
-    <!-- Recommended for you in Selected Timezone -->
-    ${
-      primaryRecLoc
-        ? `
-    <div class="recommended-section">
-      <div class="section-title-sm">${escapeHtml(strings.catalog.recommendedTitle)}</div>
-      <div class="recommended-grid">
-        <div class="surf-card rec-card">
-          <div class="rec-header">
-            <div class="dark-icon-badge">📍</div>
-            <div class="rec-meta">
-              <span class="rec-title">${escapeHtml(primaryRecTitle)}</span>
-              <span class="rec-location">${renderFlagBadge(primaryRecLoc.countryCode)} <strong>${escapeHtml(primaryRecLoc.country)}</strong> &bull; ${escapeHtml(primaryRecLoc.location)}</span>
-            </div>
-            <div class="rec-load-badge">${primaryRecLoc.load}% load</div>
-          </div>
-          <button type="button" class="btn btn-primary btn-sm btn-create-location-slot" data-loc-id="${escapeHtml(primaryRecLoc.id)}" data-loc-label="${escapeHtml(`${primaryRecLoc.countryCode} • ${primaryRecLoc.country} - ${primaryRecLoc.location}`)}">
-            ${escapeHtml(strings.catalog.createAndStart)}
-          </button>
+      <div class="providers-master-detail">
+        <!-- Left Column: Timezone & Region Menu -->
+        <div class="providers-menu-col" role="tablist" aria-label="Timezone & Region Groups">
+          ${tzMenuItemsHtml}
         </div>
-        ${
-          backupRecLoc
-            ? `
-          <div class="surf-card rec-card">
-            <div class="rec-header">
-              <div class="dark-icon-badge">⚡</div>
-              <div class="rec-meta">
-                <span class="rec-title">${escapeHtml(backupRecTitle)}</span>
-                <span class="rec-location">${renderFlagBadge(backupRecLoc.countryCode)} <strong>${escapeHtml(backupRecLoc.country)}</strong> &bull; ${escapeHtml(backupRecLoc.location)}</span>
+
+        <!-- Right Column: Search, Geo-Cluster Filter, Recommended & Server Cards -->
+        <div class="providers-detail-col" style="display:flex; flex-direction:column; gap:14px;">
+          <div class="surf-card" style="padding:14px 16px; display:flex; flex-direction:column; gap:10px;">
+            <div class="catalog-top-row" style="margin:0;">
+              <div class="search-box" style="flex:1; min-width:160px;">
+                <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#5E6675" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input
+                  type="search"
+                  id="catalog-search-input"
+                  class="search-input"
+                  placeholder="${escapeHtml(strings.catalog.searchPlaceholder)}"
+                  value="${escapeHtml(catalogSearchQuery)}"
+                />
               </div>
-              <div class="rec-load-badge">${backupRecLoc.load}% load</div>
+
+              <div class="pill-tabs" role="tablist">
+                <button type="button" class="pill-tab catalog-pill-tab ${catalogFilterType === "all" ? "active" : ""}" data-filter="all">
+                  ${escapeHtml(strings.catalog.filterAll)}
+                </button>
+                <button type="button" class="pill-tab catalog-pill-tab ${catalogFilterType === "generic" ? "active" : ""}" data-filter="generic">
+                  ${escapeHtml(strings.catalog.genericType)}
+                </button>
+                <button type="button" class="pill-tab catalog-pill-tab ${catalogFilterType === "static" ? "active" : ""}" data-filter="static">
+                  ${escapeHtml(strings.catalog.filterStatic)}
+                </button>
+              </div>
             </div>
-            <button type="button" class="btn btn-primary btn-sm btn-create-location-slot" data-loc-id="${escapeHtml(backupRecLoc.id)}" data-loc-label="${escapeHtml(`${backupRecLoc.countryCode} • ${backupRecLoc.country} - ${backupRecLoc.location}`)}">
-              ${escapeHtml(strings.catalog.createAndStart)}
-            </button>
+
+            ${
+              geoClusterSelectHtml
+                ? `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+                     ${geoClusterSelectHtml}
+                   </div>`
+                : ""
+            }
           </div>
-        `
-            : ""
-        }
+
+          ${
+            primaryRecLoc
+              ? `
+            <div class="recommended-section" style="margin:0;">
+              <div class="section-title-sm">${escapeHtml(strings.catalog.recommendedTitle)}</div>
+              <div class="recommended-grid">
+                <div class="surf-card rec-card">
+                  <div class="rec-header">
+                    <div class="dark-icon-badge">📍</div>
+                    <div class="rec-meta">
+                      <span class="rec-title">${escapeHtml(primaryRecTitle)}</span>
+                      <span class="rec-location">${renderFlagBadge(primaryRecLoc.countryCode)} <strong>${escapeHtml(primaryRecLoc.country)}</strong> &bull; ${escapeHtml(primaryRecLoc.location)}</span>
+                    </div>
+                    <div class="rec-load-badge">${primaryRecLoc.load}% load</div>
+                  </div>
+                  <button type="button" class="btn btn-primary btn-sm btn-create-location-slot" data-loc-id="${escapeHtml(primaryRecLoc.id)}" data-loc-label="${escapeHtml(`${primaryRecLoc.countryCode} • ${primaryRecLoc.country} - ${primaryRecLoc.location}`)}">
+                    ${escapeHtml(strings.catalog.createAndStart)}
+                  </button>
+                </div>
+                ${
+                  backupRecLoc
+                    ? `
+                  <div class="surf-card rec-card">
+                    <div class="rec-header">
+                      <div class="dark-icon-badge">⚡</div>
+                      <div class="rec-meta">
+                        <span class="rec-title">${escapeHtml(backupRecTitle)}</span>
+                        <span class="rec-location">${renderFlagBadge(backupRecLoc.countryCode)} <strong>${escapeHtml(backupRecLoc.country)}</strong> &bull; ${escapeHtml(backupRecLoc.location)}</span>
+                      </div>
+                      <div class="rec-load-badge">${backupRecLoc.load}% load</div>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm btn-create-location-slot" data-loc-id="${escapeHtml(backupRecLoc.id)}" data-loc-label="${escapeHtml(`${backupRecLoc.countryCode} • ${backupRecLoc.country} - ${backupRecLoc.location}`)}">
+                      ${escapeHtml(strings.catalog.createAndStart)}
+                    </button>
+                  </div>
+                `
+                    : ""
+                }
+              </div>
+            </div>
+            `
+              : ""
+          }
+
+          ${groupedSectionsHtml}
+        </div>
       </div>
     </div>
-    `
-        : ""
-    }
-
-    <!-- Grouped By Exact Timezone Sections -->
-    ${groupedSectionsHtml}
   `;
 }
 
@@ -3935,6 +3946,18 @@ function attachEventListeners(): void {
       const prov = btn.getAttribute("data-provider") as typeof catalogProviderFilter | null;
       if (prov) {
         catalogProviderFilter = prov;
+        render();
+      }
+    });
+  });
+
+  // Catalog timezone master-detail left menu item click
+  document.querySelectorAll<HTMLButtonElement>(".catalog-tz-menu-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tz = btn.getAttribute("data-tz-group");
+      if (tz) {
+        catalogTzFilter = tz;
+        catalogGeoClusterFilter = "all";
         render();
       }
     });
