@@ -830,7 +830,61 @@ table.data-table tr:last-child td {
   border-bottom: none;
 }
 
-/* 8. View 2: Locations Elements */
+/* 8. View 2: Locations Elements - 2-Column Layout */
+.locations-view {
+  width: 100%;
+}
+
+.locations-layout-2col {
+  display: grid;
+  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .locations-layout-2col {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+.locations-col-left {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.locations-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.locations-control-card {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.geo-cluster-info-card {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+}
+
 .tz-dropdown-bar {
   display: flex;
   flex-direction: column;
@@ -954,8 +1008,8 @@ table.data-table tr:last-child td {
 
 .locations-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
 }
 
 .location-card {

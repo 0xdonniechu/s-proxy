@@ -1443,12 +1443,12 @@ function renderSidebarRail(): string {
   const strings = getStrings();
   return `
     <aside class="sidebar-rail">
-      <div class="sidebar-logo" title="s-proxy Hub v1.1">
+      <div class="sidebar-logo" title="s-proxy Hub v1.1.8">
         <svg viewBox="0 0 256 256" width="36" height="36" fill="none">
           <path d="M191 36 C174 9 140 0 98 2 C62 4 40 14 35 42 C30 74 27 124 32 156 C36 182 59 205 102 226 C144 246 184 256 208 254 C226 252 229 230 225 196 C219 148 206 64 191 36 Z" fill="#2563EB"/>
           <path d="M94 168 A22 22 0 0 0 116 146 L116 76 A18 18 0 0 1 134 58 L141 58 A27 32 0 0 1 141 122 L116 122" stroke="#FFFFFF" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span class="sidebar-version-pill">v1.1</span>
+        <span class="sidebar-version-pill">v1.1.8</span>
       </div>
 
       <nav class="sidebar-nav">
@@ -2568,126 +2568,184 @@ function renderCatalogTab(snap: HubSnapshot): string {
       : "Safe Same-Cluster Failover (< 850 km • Impossible Travel Guard)";
 
   return `
-    <!-- Multi-Provider Filter Bar -->
-    <div class="provider-filter-bar">
-      <div class="pill-tabs" role="tablist">
-        ${providerTabsHtml}
-      </div>
-    </div>
-
-    <!-- Timezone & Geo-Proximity Dropdown Selector Card (Defaults to Host System Timezone) -->
-    <div class="surf-card tz-dropdown-bar">
-      <div class="tz-dropdown-left">
-        <label for="catalog-tz-select" class="tz-dropdown-label">
-          🕒 ${escapeHtml(currentLanguage === "vi" ? "Chọn Múi Giờ & Cụm Địa Lý Hợp Lý:" : "Select Timezone & Safe Geo-Cluster:")}
-        </label>
-        <div class="subtext-sm">
-          ${escapeHtml(
-            currentLanguage === "vi"
-              ? `Mặc định theo múi giờ máy (${sysTzGroupMeta.tzBadge}) • Tách cụm khoảng cách thật để chống nền tảng detect Impossible Travel`
-              : `Defaults to system timezone (${sysTzGroupMeta.tzBadge}) • Separated by real-world distance against Impossible Travel detection`
-          )}
-        </div>
-      </div>
-      <div class="tz-dropdown-controls">
-        <select id="catalog-tz-select" class="select-input catalog-tz-select">
-          ${tzSelectOptionsHtml}
-        </select>
-        ${geoClusterSelectHtml}
-        ${
-          !isUsingSystemTz
-            ? `<button type="button" class="btn btn-secondary btn-sm" id="btn-reset-system-tz" title="${escapeHtml(sysTzGroupMeta.groupLabel)}">
-                 ↺ ${escapeHtml(currentLanguage === "vi" ? `Về múi giờ máy (${sysTzInfo.utcOffsetLabel})` : `System Timezone (${sysTzInfo.utcOffsetLabel})`)}
-               </button>`
-            : `<span class="badge badge-running mono">🖥 ${escapeHtml(currentLanguage === "vi" ? `Múi giờ máy (${sysTzInfo.utcOffsetLabel})` : `System TZ (${sysTzInfo.utcOffsetLabel})`)}</span>`
-        }
-      </div>
-    </div>
-
-    <!-- Top Search & Filter Bar -->
-    <div class="catalog-top-row">
-      <div class="search-box">
-        <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#5E6675" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
-        <input
-          type="search"
-          id="catalog-search-input"
-          class="search-input"
-          placeholder="${escapeHtml(strings.catalog.searchPlaceholder)}"
-          value="${escapeHtml(catalogSearchQuery)}"
-        />
-      </div>
-
-      <div class="pill-tabs" role="tablist">
-        <button type="button" class="pill-tab catalog-pill-tab ${catalogFilterType === "all" ? "active" : ""}" data-filter="all">
-          ${escapeHtml(strings.catalog.filterAll)}
-        </button>
-        <button type="button" class="pill-tab catalog-pill-tab ${catalogFilterType === "generic" ? "active" : ""}" data-filter="generic">
-          ${escapeHtml(strings.catalog.genericType)}
-        </button>
-        <button type="button" class="pill-tab catalog-pill-tab ${catalogFilterType === "static" ? "active" : ""}" data-filter="static">
-          ${escapeHtml(strings.catalog.filterStatic)}
-        </button>
-      </div>
-
-      <div class="catalog-count-badge">
-        ${escapeHtml(
-          currentLanguage === "vi"
-            ? `Đang có ${filtered.length} proxy khả dụng trong múi giờ này`
-            : `Showing ${filtered.length} available proxies in selected timezone`
-        )}
-      </div>
-    </div>
-
-    <!-- Recommended for you in Selected Timezone -->
-    ${
-      primaryRecLoc
-        ? `
-    <div class="recommended-section">
-      <div class="section-title-sm">${escapeHtml(strings.catalog.recommendedTitle)}</div>
-      <div class="recommended-grid">
-        <div class="surf-card rec-card">
-          <div class="rec-header">
-            <div class="dark-icon-badge">📍</div>
-            <div class="rec-meta">
-              <span class="rec-title">${escapeHtml(primaryRecTitle)}</span>
-              <span class="rec-location">${renderFlagBadge(primaryRecLoc.countryCode)} <strong>${escapeHtml(primaryRecLoc.country)}</strong> &bull; ${escapeHtml(primaryRecLoc.location)}</span>
-            </div>
-            <div class="rec-load-badge">${primaryRecLoc.load}% load</div>
-          </div>
-          <button type="button" class="btn btn-primary btn-sm btn-create-location-slot" data-loc-id="${escapeHtml(primaryRecLoc.id)}" data-loc-label="${escapeHtml(`${primaryRecLoc.countryCode} • ${primaryRecLoc.country} - ${primaryRecLoc.location}`)}">
-            ${escapeHtml(strings.catalog.createAndStart)}
-          </button>
-        </div>
-        ${
-          backupRecLoc
-            ? `
-          <div class="surf-card rec-card">
-            <div class="rec-header">
-              <div class="dark-icon-badge">⚡</div>
-              <div class="rec-meta">
-                <span class="rec-title">${escapeHtml(backupRecTitle)}</span>
-                <span class="rec-location">${renderFlagBadge(backupRecLoc.countryCode)} <strong>${escapeHtml(backupRecLoc.country)}</strong> &bull; ${escapeHtml(backupRecLoc.location)}</span>
+    <div class="locations-view">
+      <div class="locations-layout-2col">
+        <!-- Left Column: Controls, Timezone/Cluster & Recommendations -->
+        <div class="locations-col-left">
+          <!-- 1. Multi-Provider Selection Card -->
+          <div class="surf-card locations-control-card">
+            <div class="control-card-header">
+              <div class="section-title-sm" style="margin-bottom: 2px;">
+                ${escapeHtml(currentLanguage === "vi" ? "Nhà cung cấp VPN" : "VPN Providers")}
               </div>
-              <div class="rec-load-badge">${backupRecLoc.load}% load</div>
+              <div class="subtext-sm">
+                ${escapeHtml(currentLanguage === "vi" ? "Lọc proxy theo hạ tầng VPN đang hoạt động" : "Filter proxies by active VPN provider infrastructure")}
+              </div>
             </div>
-            <button type="button" class="btn btn-primary btn-sm btn-create-location-slot" data-loc-id="${escapeHtml(backupRecLoc.id)}" data-loc-label="${escapeHtml(`${backupRecLoc.countryCode} • ${backupRecLoc.country} - ${backupRecLoc.location}`)}">
-              ${escapeHtml(strings.catalog.createAndStart)}
-            </button>
+            <div class="pill-tabs" role="tablist" style="margin-top: 8px; flex-wrap: wrap; gap: 6px;">
+              ${providerTabsHtml}
+            </div>
           </div>
-        `
-            : ""
-        }
+
+          <!-- 2. Timezone & Safe Geo-Cluster Filter Card -->
+          <div class="surf-card locations-control-card">
+            <div class="control-card-header">
+              <label for="catalog-tz-select" class="tz-dropdown-label">
+                🕒 ${escapeHtml(currentLanguage === "vi" ? "Múi Giờ & Cụm Địa Lý" : "Timezone & Safe Geo-Cluster")}
+              </label>
+              <div class="subtext-sm">
+                ${escapeHtml(
+                  currentLanguage === "vi"
+                    ? `Mặc định theo múi giờ máy (${sysTzGroupMeta.tzBadge}) • Chống Impossible Travel`
+                    : `Defaults to system timezone (${sysTzGroupMeta.tzBadge}) • Impossible Travel Guard`
+                )}
+              </div>
+            </div>
+            <div class="tz-dropdown-controls" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+              <select id="catalog-tz-select" class="select-input catalog-tz-select" style="width: 100%;">
+                ${tzSelectOptionsHtml}
+              </select>
+              ${geoClusterSelectHtml}
+              <div style="margin-top: 2px; width: 100%;">
+                ${
+                  !isUsingSystemTz
+                    ? `<button type="button" class="btn btn-secondary btn-sm" id="btn-reset-system-tz" style="width: 100%;" title="${escapeHtml(sysTzGroupMeta.groupLabel)}">
+                         ↺ ${escapeHtml(currentLanguage === "vi" ? `Về múi giờ máy (${sysTzInfo.utcOffsetLabel})` : `System Timezone (${sysTzInfo.utcOffsetLabel})`)}
+                       </button>`
+                    : `<span class="badge badge-running mono" style="display:inline-flex; width: 100%; justify-content: center; padding: 6px;">🖥 ${escapeHtml(currentLanguage === "vi" ? `Đang dùng múi giờ máy (${sysTzInfo.utcOffsetLabel})` : `Using System TZ (${sysTzInfo.utcOffsetLabel})`)}</span>`
+                }
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Recommended Top Proxy Nodes -->
+          ${
+            primaryRecLoc
+              ? `
+          <div class="surf-card locations-control-card recommended-section">
+            <div class="control-card-header">
+              <div class="section-title-sm" style="margin-bottom: 2px;">
+                ${escapeHtml(strings.catalog.recommendedTitle)}
+              </div>
+              <div class="subtext-sm">
+                ${escapeHtml(currentLanguage === "vi" ? "Tải thấp nhất & an toàn failover trong cụm" : "Lowest load & safe failover in cluster")}
+              </div>
+            </div>
+            <div class="recommended-grid" style="margin-top: 8px; display: flex; flex-direction: column; gap: 8px;">
+              <div class="surf-card rec-card" style="background: #F8FAFC; border: 1px solid #E2E8F0;">
+                <div class="rec-header">
+                  <div class="dark-icon-badge">📍</div>
+                  <div class="rec-meta">
+                    <span class="rec-title">${escapeHtml(primaryRecTitle)}</span>
+                    <span class="rec-location">${renderFlagBadge(primaryRecLoc.countryCode)} <strong>${escapeHtml(primaryRecLoc.country)}</strong> &bull; ${escapeHtml(primaryRecLoc.location)}</span>
+                  </div>
+                  <div class="rec-load-badge">${primaryRecLoc.load}% load</div>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm btn-create-location-slot" style="margin-top: 6px;" data-loc-id="${escapeHtml(primaryRecLoc.id)}" data-loc-label="${escapeHtml(`${primaryRecLoc.countryCode} • ${primaryRecLoc.country} - ${primaryRecLoc.location}`)}">
+                  ${escapeHtml(strings.catalog.createAndStart)}
+                </button>
+              </div>
+              ${
+                backupRecLoc
+                  ? `
+                <div class="surf-card rec-card" style="background: #F8FAFC; border: 1px solid #E2E8F0;">
+                  <div class="rec-header">
+                    <div class="dark-icon-badge">⚡</div>
+                    <div class="rec-meta">
+                      <span class="rec-title">${escapeHtml(backupRecTitle)}</span>
+                      <span class="rec-location">${renderFlagBadge(backupRecLoc.countryCode)} <strong>${escapeHtml(backupRecLoc.country)}</strong> &bull; ${escapeHtml(backupRecLoc.location)}</span>
+                    </div>
+                    <div class="rec-load-badge">${backupRecLoc.load}% load</div>
+                  </div>
+                  <button type="button" class="btn btn-primary btn-sm btn-create-location-slot" style="margin-top: 6px;" data-loc-id="${escapeHtml(backupRecLoc.id)}" data-loc-label="${escapeHtml(`${backupRecLoc.countryCode} • ${backupRecLoc.country} - ${backupRecLoc.location}`)}">
+                    ${escapeHtml(strings.catalog.createAndStart)}
+                  </button>
+                </div>
+              `
+                  : ""
+              }
+            </div>
+          </div>
+          `
+              : ""
+          }
+
+          <!-- 4. Geo-Cluster & Anti-Detection Standards Card -->
+          <div class="surf-card geo-cluster-info-card">
+            <div class="security-summary-title">
+              <span>🛡</span>
+              <span>${escapeHtml(currentLanguage === "vi" ? "Tiêu chuẩn Cụm Địa lý & Anti-Detection" : "Geo-Cluster & Anti-Detection Standards")}</span>
+            </div>
+            <div class="security-summary-list">
+              <div class="security-summary-item">
+                <span class="summary-dot">✔</span>
+                <div class="summary-item-text">
+                  <strong>${escapeHtml(currentLanguage === "vi" ? "Khoảng cách < 850 km:" : "< 850 km Hop Radius:")}</strong>
+                  ${escapeHtml(currentLanguage === "vi" ? "Chỉ đổi proxy nội bộ cụm để không bị nền tảng gắn cờ Impossible Travel." : "Switching nodes within cluster avoids Impossible Travel detection.")}
+                </div>
+              </div>
+              <div class="security-summary-item">
+                <span class="summary-dot">✔</span>
+                <div class="summary-item-text">
+                  <strong>${escapeHtml(currentLanguage === "vi" ? "Đồng bộ Múi giờ IANA:" : "IANA Timezone Sync:")}</strong>
+                  ${escapeHtml(currentLanguage === "vi" ? "Tự động phân nhóm UTC+7, UTC+8, UTC+9, UTC-5 khớp múi giờ máy và profile." : "Auto-grouped by UTC+7, UTC+8, UTC+9, UTC-5 matching host and profiles.")}
+                </div>
+              </div>
+              <div class="security-summary-item">
+                <span class="summary-dot">✔</span>
+                <div class="summary-item-text">
+                  <strong>${escapeHtml(currentLanguage === "vi" ? "Chống rò rỉ IP ISP:" : "Zero ISP IP Leak:")}</strong>
+                  ${escapeHtml(currentLanguage === "vi" ? "Bảo vệ tài khoản GoLogin / multi-accounting bằng cơ chế fail-closed tuyệt đối." : "Guards GoLogin / multi-accounting accounts with fail-closed tunneling.")}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Search Toolbar & Locations Grid -->
+        <div class="locations-col-right">
+          <!-- Top Search & Filter Bar -->
+          <div class="catalog-top-row">
+            <div class="search-box" style="flex: 1 1 180px;">
+              <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#5E6675" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input
+                type="search"
+                id="catalog-search-input"
+                class="search-input"
+                placeholder="${escapeHtml(strings.catalog.searchPlaceholder)}"
+                value="${escapeHtml(catalogSearchQuery)}"
+              />
+            </div>
+
+            <div class="pill-tabs" role="tablist">
+              <button type="button" class="pill-tab catalog-pill-tab ${catalogFilterType === "all" ? "active" : ""}" data-filter="all">
+                ${escapeHtml(strings.catalog.filterAll)}
+              </button>
+              <button type="button" class="pill-tab catalog-pill-tab ${catalogFilterType === "generic" ? "active" : ""}" data-filter="generic">
+                ${escapeHtml(strings.catalog.genericType)}
+              </button>
+              <button type="button" class="pill-tab catalog-pill-tab ${catalogFilterType === "static" ? "active" : ""}" data-filter="static">
+                ${escapeHtml(strings.catalog.filterStatic)}
+              </button>
+            </div>
+
+            <div class="catalog-count-badge">
+              ${escapeHtml(
+                currentLanguage === "vi"
+                  ? `Đang có ${filtered.length} proxy khả dụng`
+                  : `Showing ${filtered.length} available proxies`
+              )}
+            </div>
+          </div>
+
+          <!-- Grouped By Exact Timezone Sections -->
+          ${groupedSectionsHtml}
+        </div>
       </div>
     </div>
-    `
-        : ""
-    }
-
-    <!-- Grouped By Exact Timezone Sections -->
-    ${groupedSectionsHtml}
   `;
 }
 
@@ -3120,7 +3178,7 @@ function renderSettingsTab(snap: HubSnapshot): string {
         <div class="surf-card settings-card" style="grid-column: 1 / -1; margin-top: 6px; border: 1px solid #bfdbfe; background: #f8faff;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-weight: 700; font-size: 13.5px; color: #1e40af;">s-proxy v1.1</span>
+              <span style="font-weight: 700; font-size: 13.5px; color: #1e40af;">s-proxy v1.1.8</span>
               <span class="badge badge-accent">Release</span>
             </div>
             <span class="subtext">${escapeHtml(strings.about.authorName)}</span>
@@ -3159,7 +3217,7 @@ function renderAboutTab(snap: HubSnapshot): string {
           <div class="about-hero-info">
             <div class="about-title-row">
               <h1 class="about-title">s-proxy</h1>
-              <span class="about-version-tag">v1.1</span>
+              <span class="about-version-tag">v1.1.8</span>
               <span class="about-status-tag">Stable Release</span>
             </div>
             <div class="about-subtitle">${escapeHtml(strings.about.subtitle)}</div>
@@ -3234,7 +3292,7 @@ function renderAboutTab(snap: HubSnapshot): string {
       <div class="surf-card about-meta-card">
         <div class="meta-row">
           <span class="meta-label">${escapeHtml(strings.about.version)}</span>
-          <span class="meta-value mono">1.1.0</span>
+          <span class="meta-value mono">1.1.8</span>
         </div>
         <div class="meta-row">
           <span class="meta-label">${escapeHtml(strings.about.author)}</span>
@@ -3634,7 +3692,7 @@ function render(): void {
       break;
   }
 
-  const showRightDeck = activeTab === "hub" || activeTab === "catalog";
+  const showRightDeck = activeTab === "hub";
 
   app.innerHTML = `
     <div class="app-shell">
