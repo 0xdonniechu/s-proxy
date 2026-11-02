@@ -157,17 +157,20 @@ body {
 /* 2. Main Area */
 .main-area {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   background-color: var(--bg-page);
-  padding: 28px 36px;
+  padding: 20px 22px;
 }
 
 .main-container {
-  max-width: 1120px;
+  max-width: 100%;
+  min-width: 0;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 16px;
 }
 
 /* 3. Typography & Badges */
@@ -440,7 +443,7 @@ body {
   display: flex;
   align-items: center;
   flex: 1;
-  min-width: 260px;
+  min-width: 200px;
 }
 
 .search-box .search-icon {
@@ -451,12 +454,12 @@ body {
 
 .search-box .search-input {
   width: 100%;
-  height: 46px;
+  height: 38px;
   border-radius: 10px;
   border: 1px solid var(--border-light);
   background-color: #FFFFFF;
-  padding: 0 16px 0 42px;
-  font-size: 14px;
+  padding: 0 14px 0 40px;
+  font-size: 13px;
   color: var(--text-primary);
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -472,10 +475,11 @@ body {
 .pill-tabs {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   background-color: #EAECEF;
   border-radius: 10px;
   padding: 3px;
+  flex-wrap: wrap;
 }
 
 .pill-tab {
@@ -483,12 +487,13 @@ body {
   background-color: transparent;
   color: var(--text-secondary);
   font-weight: 500;
-  font-size: 13px;
+  font-size: 12px;
   border-radius: 8px;
-  padding: 8px 16px;
+  padding: 6px 11px;
   cursor: pointer;
   transition: all 0.15s ease;
   font-family: inherit;
+  white-space: nowrap;
 }
 
 .pill-tab:hover {
@@ -757,11 +762,10 @@ table.data-table tr:last-child td {
 /* 8. View 2: Locations Elements */
 .tz-dropdown-bar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 22px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 14px 18px;
   border: 1px solid rgba(22, 138, 158, 0.22);
 }
 
@@ -769,11 +773,11 @@ table.data-table tr:last-child td {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 240px;
+  min-width: 0;
 }
 
 .tz-dropdown-label {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--text-primary);
   cursor: pointer;
@@ -782,18 +786,17 @@ table.data-table tr:last-child td {
 .tz-dropdown-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex: 1;
-  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
   flex-wrap: wrap;
 }
 
 .catalog-tz-select {
-  flex: 1;
-  min-width: 300px;
-  max-width: 580px;
-  height: 42px;
-  font-size: 13.5px;
+  flex: 1 1 240px;
+  min-width: 0;
+  max-width: 100%;
+  height: 38px;
+  font-size: 12.5px;
   font-weight: 600;
 }
 
@@ -801,12 +804,12 @@ table.data-table tr:last-child td {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .catalog-count-badge {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
   font-weight: 500;
 }
@@ -814,49 +817,57 @@ table.data-table tr:last-child td {
 .recommended-section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .recommended-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .rec-card {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   justify-content: space-between;
-  gap: 16px;
-  padding: 16px 20px;
+  gap: 10px;
+  padding: 14px 16px;
+  min-width: 0;
 }
 
 .rec-header {
   display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
 }
 
 .rec-meta {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1;
+  min-width: 0;
 }
 
 .rec-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-primary);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
 }
 
 .rec-location {
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .rec-load-badge {
@@ -866,20 +877,23 @@ table.data-table tr:last-child td {
   border-radius: 6px;
   background-color: #EAECEF;
   color: var(--text-primary);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .locations-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .location-card {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 12px;
-  padding: 16px 18px;
+  gap: 10px;
+  padding: 14px 16px;
+  min-width: 0;
 }
 
 .loc-card-main {
@@ -948,6 +962,14 @@ table.data-table tr:last-child td {
   gap: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--border-subtle);
+  min-width: 0;
+}
+
+.loc-card-footer > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 9. View 3: GoLogin Sync Elements */
@@ -1244,8 +1266,8 @@ table.data-table tr:last-child td {
 
 .subsystem-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .subsystem-card {
