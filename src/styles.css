@@ -8,8 +8,9 @@
   --text-primary: #151922;
   --text-secondary: #687182;
   --text-muted: #8D96A5;
-  --teal: #168A9E;
-  --teal-hover: #127384;
+  --teal: #3B7BF6;
+  --teal-hover: #2563EB;
+  --teal-soft: #EBF2FF;
   --dark-btn: #151922;
   --dark-hover: #262C3A;
   --success: #16A34A;
@@ -851,54 +852,62 @@ table.data-table tr:last-child td {
   gap: 8px;
 }
 
-.recommended-grid {
+.rec-split-card {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  padding: 0;
+  overflow: hidden;
 }
 
-.rec-card {
+.rec-split-col {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
   justify-content: space-between;
   gap: 10px;
-  padding: 14px 16px;
+  padding: 16px 18px;
   min-width: 0;
 }
 
-.rec-header {
+.rec-split-col + .rec-split-col {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.rec-col-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
+  gap: 8px;
 }
 
-.rec-meta {
+.rec-col-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  flex: 1;
+  gap: 3px;
   min-width: 0;
 }
 
-.rec-title {
-  font-size: 11px;
+.rec-col-location {
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--text-primary);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  line-height: 1.3;
-}
-
-.rec-location {
-  font-size: 12.5px;
-  color: var(--text-secondary);
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
+.rec-col-location > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rec-col-sub {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .rec-load-badge {
@@ -912,26 +921,39 @@ table.data-table tr:last-child td {
   white-space: nowrap;
 }
 
-.locations-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.location-card {
+.locations-list-card {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 14px 16px;
-  min-width: 0;
+  padding: 4px 14px;
 }
 
-.loc-card-main {
+.loc-row-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
+  padding: 11px 2px;
+  border-bottom: 1px solid var(--border-subtle);
+  min-width: 0;
+}
+
+.loc-row-item:last-child {
+  border-bottom: none;
+}
+
+.loc-row-left {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex: 1;
+  min-width: 0;
+}
+
+.loc-row-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .loc-flag-col {
@@ -944,7 +966,7 @@ table.data-table tr:last-child td {
 }
 
 .loc-country {
-  font-size: 15px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
@@ -953,7 +975,7 @@ table.data-table tr:last-child td {
 }
 
 .loc-city {
-  font-size: 13px;
+  font-size: 11.5px;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -1367,9 +1389,9 @@ table.data-table tr:last-child td {
 }
 
 .provider-menu-item.active {
-  background-color: #EDF6F8;
-  border-color: rgba(22, 138, 158, 0.35);
-  box-shadow: 0 2px 6px rgba(22, 138, 158, 0.08);
+  background-color: var(--teal-soft);
+  border-color: rgba(59, 123, 246, 0.38);
+  box-shadow: 0 2px 6px rgba(59, 123, 246, 0.08);
 }
 
 .provider-menu-item .provider-logo-badge {
@@ -1470,15 +1492,9 @@ table.data-table tr:last-child td {
 }
 
 .provider-logo-badge.has-brand-img {
-  background-color: #FFFFFF;
-  border: 1px solid var(--border-subtle);
-  padding: 2px;
-}
-
-.provider-logo-badge.has-brand-img.prov-surfshark,
-.provider-logo-badge.has-brand-img.prov-nordvpn {
-  padding: 0;
+  background-color: transparent;
   border: none;
+  padding: 0;
 }
 
 .provider-logo-img {
@@ -1486,11 +1502,10 @@ table.data-table tr:last-child td {
   height: 100%;
   object-fit: contain;
   display: block;
-  border-radius: inherit;
 }
 
 .prov-surfshark {
-  background-color: #168A9E;
+  background-color: #3B7BF6;
 }
 
 .prov-nordvpn {
@@ -1663,7 +1678,7 @@ table.data-table tr:last-child td {
 }
 
 .surf-right-deck.is-connected .deck-status-accent {
-  color: #36B8C6;
+  color: #528CFF;
 }
 
 .deck-status-sub {
@@ -1703,9 +1718,9 @@ table.data-table tr:last-child td {
 }
 
 .deck-signal-emitter.signal-online .signal-shield-core {
-  background-color: #36B8C6;
-  color: #0E1318;
-  box-shadow: 0 6px 22px rgba(54, 184, 198, 0.45);
+  background-color: #3B7BF6;
+  color: #FFFFFF;
+  box-shadow: 0 6px 22px rgba(59, 123, 246, 0.45);
 }
 
 .signal-ring {
@@ -1723,7 +1738,7 @@ table.data-table tr:last-child td {
 }
 
 .deck-signal-emitter.signal-online .signal-ring {
-  border-color: rgba(54, 184, 198, 0.55);
+  border-color: rgba(59, 123, 246, 0.55);
 }
 
 .signal-ring.ring-1 {
@@ -1850,8 +1865,8 @@ table.data-table tr:last-child td {
 }
 
 .deck-profile-box.is-synced {
-  border-color: rgba(54, 184, 198, 0.65);
-  background-color: rgba(22, 138, 158, 0.14);
+  border-color: rgba(59, 123, 246, 0.65);
+  background-color: rgba(59, 123, 246, 0.14);
 }
 
 .deck-box-left {
@@ -1927,15 +1942,15 @@ table.data-table tr:last-child td {
 }
 
 .deck-box-btn:hover {
-  background-color: #36B8C6;
-  border-color: #36B8C6;
-  color: #0E1318;
+  background-color: #3B7BF6;
+  border-color: #3B7BF6;
+  color: #FFFFFF;
 }
 
 .deck-box-btn.is-connected {
-  background-color: rgba(54, 184, 198, 0.22);
-  border-color: #36B8C6;
-  color: #5CE1E6;
+  background-color: rgba(59, 123, 246, 0.22);
+  border-color: #3B7BF6;
+  color: #7DB0FF;
 }
 
 /* Bottom Dock: Active Location Card + Quick-Connect Button */
@@ -2002,7 +2017,7 @@ table.data-table tr:last-child td {
 .deck-change-link {
   background: none;
   border: none;
-  color: #4FD1DF;
+  color: #6EA4FF;
   font-size: 12.5px;
   font-weight: 600;
   text-decoration: underline;
@@ -2012,7 +2027,7 @@ table.data-table tr:last-child td {
 }
 
 .deck-change-link:hover {
-  color: #7CE8F4;
+  color: #96BEFF;
 }
 
 .deck-quick-connect-btn {
@@ -2020,8 +2035,8 @@ table.data-table tr:last-child td {
   height: 44px;
   border-radius: 11px;
   border: none;
-  background-color: #46B5C3;
-  color: #0F141A;
+  background-color: #3B7BF6;
+  color: #FFFFFF;
   font-size: 14.5px;
   font-weight: 700;
   cursor: pointer;
@@ -2029,7 +2044,7 @@ table.data-table tr:last-child td {
 }
 
 .deck-quick-connect-btn:hover {
-  background-color: #55C5D3;
+  background-color: #4E8BFF;
 }
 
 .deck-quick-connect-btn.is-running {
