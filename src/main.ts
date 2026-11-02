@@ -160,7 +160,7 @@ function detectSystemTimezoneInfo(): {
 // State
 let snapshot: HubSnapshot | null = null;
 let currentLanguage: AppLanguage = "en";
-let activeTab: "hub" | "status" | "catalog" | "providers" | "gologin" | "settings" = "hub";
+let activeTab: "hub" | "status" | "catalog" | "providers" | "gologin" | "settings" | "about" = "hub";
 
 // Catalog filter state (defaults to host machine's current timezone)
 let catalogSearchQuery = "";
@@ -1419,11 +1419,12 @@ function renderSidebarRail(): string {
   const strings = getStrings();
   return `
     <aside class="sidebar-rail">
-      <div class="sidebar-logo" title="s-proxy Hub">
+      <div class="sidebar-logo" title="s-proxy Hub v1.1">
         <svg viewBox="0 0 256 256" width="36" height="36" fill="none">
           <path d="M191 36 C174 9 140 0 98 2 C62 4 40 14 35 42 C30 74 27 124 32 156 C36 182 59 205 102 226 C144 246 184 256 208 254 C226 252 229 230 225 196 C219 148 206 64 191 36 Z" fill="#2563EB"/>
           <path d="M94 168 A22 22 0 0 0 116 146 L116 76 A18 18 0 0 1 134 58 L141 58 A27 32 0 0 1 141 122 L116 122" stroke="#FFFFFF" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
+        <span class="sidebar-version-pill">v1.1</span>
       </div>
 
       <nav class="sidebar-nav">
@@ -1463,6 +1464,13 @@ function renderSidebarRail(): string {
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+        <button type="button" class="nav-btn tab-btn ${activeTab === "about" ? "active" : ""}" data-tab="about" title="${escapeHtml(strings.tabs.aboutTab)}">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="16" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12.01" y2="8"/>
           </svg>
         </button>
       </nav>
@@ -3033,6 +3041,143 @@ function renderSettingsTab(snap: HubSnapshot): string {
             <input type="file" id="conf-file-input" accept=".conf,.txt" style="display:none" />
           </div>
         </div>
+
+        <!-- Card 5: About & Support in Settings -->
+        <div class="surf-card settings-card" style="grid-column: 1 / -1; margin-top: 6px; border: 1px solid #bfdbfe; background: #f8faff;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-weight: 700; font-size: 13.5px; color: #1e40af;">s-proxy v1.1</span>
+              <span class="badge badge-accent">Release</span>
+            </div>
+            <span class="subtext">${escapeHtml(strings.about.authorName)}</span>
+          </div>
+          <div class="subtext" style="margin-bottom: 12px;">${escapeHtml(strings.about.starPromptDesc)}</div>
+          <div class="btn-group-sm">
+            <button type="button" class="btn btn-star btn-sm" id="btn-settings-star">
+              ${escapeHtml(strings.about.starBtn)}
+            </button>
+            <button type="button" class="btn btn-coffee btn-sm" id="btn-settings-coffee">
+              ${escapeHtml(strings.about.coffeeBtn)}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// 5b. About & Community Tab
+function renderAboutTab(snap: HubSnapshot): string {
+  const strings = getStrings();
+  const s = snap.settings;
+
+  return `
+    <div class="about-view">
+      <!-- Hero Card -->
+      <div class="about-hero-card">
+        <div class="about-hero-brand">
+          <div class="about-logo-wrapper">
+            <svg viewBox="0 0 256 256" width="60" height="60" fill="none">
+              <path d="M191 36 C174 9 140 0 98 2 C62 4 40 14 35 42 C30 74 27 124 32 156 C36 182 59 205 102 226 C144 246 184 256 208 254 C226 252 229 230 225 196 C219 148 206 64 191 36 Z" fill="#2563EB"/>
+              <path d="M94 168 A22 22 0 0 0 116 146 L116 76 A18 18 0 0 1 134 58 L141 58 A27 32 0 0 1 141 122 L116 122" stroke="#FFFFFF" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="about-hero-info">
+            <div class="about-title-row">
+              <h1 class="about-title">s-proxy</h1>
+              <span class="about-version-tag">v1.1</span>
+              <span class="about-status-tag">Stable Release</span>
+            </div>
+            <div class="about-subtitle">${escapeHtml(strings.about.subtitle)}</div>
+            <div class="about-desc">${escapeHtml(strings.about.desc)}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Community & Support Card -->
+      <div class="about-support-card">
+        <div class="about-star-content">
+          <div class="about-star-icon">⭐</div>
+          <div class="about-star-text">
+            <div class="about-star-headline">${escapeHtml(strings.about.starPromptTitle)}</div>
+            <div class="about-star-sub">${escapeHtml(strings.about.starPromptDesc)}</div>
+          </div>
+        </div>
+        <div class="about-action-buttons">
+          <button type="button" class="btn btn-star" id="btn-about-star">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+            <span>${escapeHtml(strings.about.starBtn)}</span>
+          </button>
+          <button type="button" class="btn btn-coffee" id="btn-about-coffee">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
+              <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
+              <line x1="6" y1="1" x2="6" y2="4"/>
+              <line x1="10" y1="1" x2="10" y2="4"/>
+              <line x1="14" y1="1" x2="14" y2="4"/>
+            </svg>
+            <span>${escapeHtml(strings.about.coffeeBtn)}</span>
+          </button>
+          <button type="button" class="btn btn-secondary" id="btn-about-github">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+            </svg>
+            <span>${escapeHtml(strings.about.repoBtn)}</span>
+          </button>
+          <button type="button" class="btn btn-secondary" id="btn-about-report">
+            <span>${escapeHtml(strings.about.issueBtn)}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Details Grid -->
+      <div class="about-grid">
+        <div class="surf-card about-card">
+          <div class="about-card-header">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#2563EB" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <h4>${escapeHtml(strings.about.securityTitle)}</h4>
+          </div>
+          <p class="about-card-text">${escapeHtml(strings.about.securityDesc)}</p>
+        </div>
+
+        <div class="surf-card about-card">
+          <div class="about-card-header">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#16A34A" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <h4>${escapeHtml(strings.about.privacyTitle)}</h4>
+          </div>
+          <p class="about-card-text">${escapeHtml(strings.about.privacyDesc)}</p>
+        </div>
+      </div>
+
+      <!-- Metadata Table Card -->
+      <div class="surf-card about-meta-card">
+        <div class="meta-row">
+          <span class="meta-label">${escapeHtml(strings.about.version)}</span>
+          <span class="meta-value mono">1.1.0</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-label">${escapeHtml(strings.about.author)}</span>
+          <span class="meta-value">
+            <a href="https://github.com/0xdonniechu" class="about-link" id="link-about-author">
+              ${escapeHtml(strings.about.authorName)}
+            </a>
+          </span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-label">Wireproxy Engine</span>
+          <span class="meta-value mono">${escapeHtml(s.wireproxyReady ? "Ready (" + (s.wireproxyPath || "System") + ")" : "Missing")}</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-label">Framework</span>
+          <span class="meta-value mono">Tauri 2 • TypeScript • Rust</span>
+        </div>
       </div>
     </div>
   `;
@@ -3409,6 +3554,9 @@ function render(): void {
       break;
     case "settings":
       panelContent = renderSettingsTab(snapshot);
+      break;
+    case "about":
+      panelContent = renderAboutTab(snapshot);
       break;
   }
 
@@ -3996,6 +4144,57 @@ function attachEventListeners(): void {
         void handleImportWgConf(content);
       };
       reader.readAsText(file);
+    });
+  }
+
+  // About & Support actions
+  const btnAboutStar = document.getElementById("btn-about-star");
+  if (btnAboutStar) {
+    btnAboutStar.addEventListener("click", () => {
+      void openUrl("https://github.com/0xdonniechu/s-proxy");
+    });
+  }
+
+  const btnAboutCoffee = document.getElementById("btn-about-coffee");
+  if (btnAboutCoffee) {
+    btnAboutCoffee.addEventListener("click", () => {
+      void openUrl("https://buymeacoffee.com/0xdonniechu");
+    });
+  }
+
+  const btnAboutGithub = document.getElementById("btn-about-github");
+  if (btnAboutGithub) {
+    btnAboutGithub.addEventListener("click", () => {
+      void openUrl("https://github.com/0xdonniechu/s-proxy");
+    });
+  }
+
+  const btnAboutReport = document.getElementById("btn-about-report");
+  if (btnAboutReport) {
+    btnAboutReport.addEventListener("click", () => {
+      void openUrl("https://github.com/0xdonniechu/s-proxy/issues");
+    });
+  }
+
+  const linkAboutAuthor = document.getElementById("link-about-author");
+  if (linkAboutAuthor) {
+    linkAboutAuthor.addEventListener("click", (e) => {
+      e.preventDefault();
+      void openUrl("https://github.com/0xdonniechu");
+    });
+  }
+
+  const btnSettingsStar = document.getElementById("btn-settings-star");
+  if (btnSettingsStar) {
+    btnSettingsStar.addEventListener("click", () => {
+      void openUrl("https://github.com/0xdonniechu/s-proxy");
+    });
+  }
+
+  const btnSettingsCoffee = document.getElementById("btn-settings-coffee");
+  if (btnSettingsCoffee) {
+    btnSettingsCoffee.addEventListener("click", () => {
+      void openUrl("https://buymeacoffee.com/0xdonniechu");
     });
   }
 

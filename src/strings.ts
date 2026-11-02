@@ -8,6 +8,7 @@ export interface I18nStrings {
     providersTab: string;
     gologinSync: string;
     settings: string;
+    aboutTab: string;
   };
   header: {
     brandSubtitle: string;
@@ -212,6 +213,24 @@ export interface I18nStrings {
     syncedToast: string;
     importedToast: string;
   };
+  about: {
+    title: string;
+    subtitle: string;
+    version: string;
+    author: string;
+    authorName: string;
+    desc: string;
+    starPromptTitle: string;
+    starPromptDesc: string;
+    starBtn: string;
+    coffeeBtn: string;
+    repoBtn: string;
+    issueBtn: string;
+    securityTitle: string;
+    securityDesc: string;
+    privacyTitle: string;
+    privacyDesc: string;
+  };
 }
 
 export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
@@ -223,6 +242,7 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       providersTab: "Nhà cung cấp VPN",
       gologinSync: "Đồng bộ GoLogin",
       settings: "Cài đặt",
+      aboutTab: "Giới thiệu",
     },
     header: {
       brandSubtitle: "Cổng Proxy Lai Surfshark & GoLogin",
@@ -427,6 +447,24 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       syncedToast: "Đã đồng bộ danh sách máy chủ & khóa thành công!",
       importedToast: "Đã nhập cấu hình .conf thành công!",
     },
+    about: {
+      title: "Về s-proxy",
+      subtitle: "Cổng Proxy Lai Tự Động Hóa cho Surfshark, NordVPN, Mullvad & GoLogin",
+      version: "Phiên bản",
+      author: "Tác giả",
+      authorName: "Donnie Chu (@0xdonniechu)",
+      desc: "s-proxy biến tài khoản VPN của bạn thành các cổng Proxy SOCKS5/HTTP cục bộ (127.0.0.1:port) độc lập, tự động đồng bộ vào từng Profile GoLogin với khả năng khóa cứng card mạng, chống rò rỉ DNS & fail-closed kill-switch.",
+      starPromptTitle: "Bạn thấy s-proxy hữu ích cho công việc?",
+      starPromptDesc: "Hãy để lại 1 Star ⭐ trên GitHub để ủng hộ dự án và giúp cộng đồng khám phá công cụ này nhé!",
+      starBtn: "⭐ Star on GitHub",
+      coffeeBtn: "☕ Buy Me a Coffee",
+      repoBtn: "GitHub Repository",
+      issueBtn: "🐛 Báo lỗi / Góp ý",
+      securityTitle: "Bảo mật & Chống rò rỉ",
+      securityDesc: "Khóa socket outbound IP_UNICAST_IF (Windows) / IP_BOUND_IF (macOS), phân giải DNS RFC 1035 nội bộ đường hầm.",
+      privacyTitle: "Quyền riêng tư dữ liệu",
+      privacyDesc: "100% hoạt động offline cục bộ trên máy. Không thu thập dữ liệu, không telemetry, không tài khoản đám mây.",
+    },
   },
   en: {
     tabs: {
@@ -436,6 +474,7 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       providersTab: "VPN Providers",
       gologinSync: "GoLogin Sync",
       settings: "Settings",
+      aboutTab: "About",
     },
     header: {
       brandSubtitle: "Surfshark & GoLogin Hybrid Proxy Hub",
@@ -639,6 +678,24 @@ export const DICTIONARY: Record<AppLanguage, I18nStrings> = {
       savedToast: "Provider configuration saved!",
       syncedToast: "Provider catalog & credentials synchronized!",
       importedToast: "Imported WireGuard .conf file(s) successfully!",
+    },
+    about: {
+      title: "About s-proxy",
+      subtitle: "Hybrid VPN Proxy Hub for Surfshark, NordVPN, Mullvad & GoLogin",
+      version: "Version",
+      author: "Author",
+      authorName: "Donnie Chu (@0xdonniechu)",
+      desc: "s-proxy turns your VPN account into local isolated SOCKS5/HTTP proxy endpoints (127.0.0.1:port) and synchronizes them directly into GoLogin browser profiles with strong adapter locking, tunnel DNS, and fail-closed kill-switch.",
+      starPromptTitle: "Finding s-proxy helpful for your workflow?",
+      starPromptDesc: "Please give us a Star ⭐ on GitHub to support active development and help the community discover it!",
+      starBtn: "⭐ Star on GitHub",
+      coffeeBtn: "☕ Buy Me a Coffee",
+      repoBtn: "GitHub Repository",
+      issueBtn: "🐛 Report an Issue",
+      securityTitle: "Leak Protection & Security",
+      securityDesc: "Strict outbound socket binding via IP_UNICAST_IF (Windows) / IP_BOUND_IF (macOS) and RFC 1035 tunnel DNS.",
+      privacyTitle: "Data Privacy Guarantee",
+      privacyDesc: "100% offline and local execution on this device. No account required, zero tracking, no cloud telemetry.",
     },
   },
 };
