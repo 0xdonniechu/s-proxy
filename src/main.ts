@@ -181,6 +181,9 @@ const hubSlotGologinSelection: Record<string, string> = {};
 let selectedDeckSlotId = "";
 let selectedDeckLocationId = "";
 
+// Selected VPN Provider in the Providers master-detail menu
+let selectedProviderTab: VpnProvider = "surfshark";
+
 // Modal states
 let isCreateBridgeModalOpen = false;
 let isCreateMultiModalOpen = false;
@@ -2606,7 +2609,7 @@ function renderCatalogTab(snap: HubSnapshot): string {
   `;
 }
 
-// 3b. View 2b: Multi-Provider Configuration Tab
+// 3b. View 2b: Multi-Provider Configuration Tab (Master-Detail Two-Column Menu)
 function renderProvidersTab(snap: HubSnapshot): string {
   const strings = getStrings();
   const pp = strings.providersPage;
@@ -2652,120 +2655,159 @@ function renderProvidersTab(snap: HubSnapshot): string {
     },
   };
 
-  const providerCardsHtml = snap.providers
+  const activeProviderView =
+    snap.providers.find((p) => p.provider === selectedProviderTab) || snap.providers[0];
+  if (activeProviderView && activeProviderView.provider !== selectedProviderTab) {
+    selectedProviderTab = activeProviderView.provider;
+  }
+
+  // Left Column: Provider Menu List
+  const providerMenuItemsHtml = snap.providers
     .map((p: ProviderView) => {
       const meta = metaByProvider[p.provider];
+      const isSelected = p.provider === selectedProviderTab;
       const serverCountText = pp.serversAvailable.replace("{count}", String(p.serverCount));
       return `
-        <div class="surf-card provider-card ${p.isReady ? "is-ready" : ""}" data-provider="${escapeHtml(p.provider)}">
-          <div class="provider-card-header">
-            <div class="provider-brand-row">
-              <div class="provider-logo-badge ${meta.badgeClass}">${escapeHtml(meta.badgeText)}</div>
-              <div>
-                <div class="slot-name">${escapeHtml(p.displayName)}</div>
-                <div class="subtext-sm">
-                  <span class="badge ${p.hasPrivateKey ? "badge-running" : "badge-stopped"}">
-                    ${escapeHtml(p.hasPrivateKey ? pp.statusReady : pp.statusMissingKey)}
-                  </span>
-                  <span class="badge badge-os mono">${escapeHtml(serverCountText)}</span>
-                </div>
-              </div>
-            </div>
-            <button type="button" class="btn btn-sm btn-secondary btn-browse-provider" data-provider="${escapeHtml(p.provider)}">
-              ${escapeHtml(pp.browseServersBtn)}
-            </button>
-          </div>
-
-          <div class="subtext">${escapeHtml(meta.desc)}</div>
-
-          ${
-            meta.supportsToken
-              ? `
-            <div class="form-group">
-              <label>${escapeHtml(pp.apiTokenLabel)}</label>
-              <input
-                type="password"
-                class="text-input mono prov-token-input"
-                data-provider="${escapeHtml(p.provider)}"
-                placeholder="${escapeHtml(p.hasApiToken ? p.apiTokenMasked : pp.apiTokenPlaceholder)}"
-              />
-            </div>
-          `
-              : ""
-          }
-
-          <div class="form-group">
-            <label>${escapeHtml(pp.privateKeyLabel)}</label>
-            <input
-              type="password"
-              class="text-input mono prov-key-input"
-              data-provider="${escapeHtml(p.provider)}"
-              placeholder="${escapeHtml(p.hasPrivateKey ? p.privateKeyMasked : pp.privateKeyPlaceholder)}"
-            />
-          </div>
-
-          <div class="provider-form-grid">
-            <div class="form-group">
-              <label>${escapeHtml(pp.addressLabel)}</label>
-              <input
-                type="text"
-                class="text-input mono prov-addr-input"
-                data-provider="${escapeHtml(p.provider)}"
-                value="${escapeHtml(p.address)}"
-              />
-            </div>
-            <div class="form-group">
-              <label>${escapeHtml(pp.dnsLabel)}</label>
-              <input
-                type="text"
-                class="text-input mono prov-dns-input"
-                data-provider="${escapeHtml(p.provider)}"
-                value="${escapeHtml(p.dns)}"
-              />
+        <button
+          type="button"
+          class="provider-menu-item ${isSelected ? "active" : ""}"
+          data-select-provider="${escapeHtml(p.provider)}"
+        >
+          <div class="provider-logo-badge ${meta.badgeClass}">${escapeHtml(meta.badgeText)}</div>
+          <div class="provider-menu-meta">
+            <div class="provider-menu-name">${escapeHtml(p.displayName)}</div>
+            <div class="provider-menu-badges">
+              <span class="status-dot ${p.hasPrivateKey ? "dot-online" : "dot-warning"}"></span>
+              <span class="provider-menu-sub">${escapeHtml(serverCountText)}</span>
             </div>
           </div>
-
-          <div class="provider-actions-row">
-            <div class="btn-group-sm">
-              <button type="button" class="btn btn-sm btn-primary btn-save-provider" data-provider="${escapeHtml(p.provider)}">
-                ${escapeHtml(pp.saveProviderBtn)}
-              </button>
-              ${
-                meta.supportsApiSync
-                  ? `<button type="button" class="btn btn-sm btn-secondary btn-sync-provider" data-provider="${escapeHtml(p.provider)}">
-                       ${escapeHtml(pp.syncCatalogBtn)}
-                     </button>`
-                  : ""
-              }
-            </div>
-            <div>
-              <button type="button" class="btn btn-sm btn-secondary btn-import-provider-conf" data-provider="${escapeHtml(p.provider)}">
-                ${escapeHtml(pp.importConfFilesBtn)}
-              </button>
-              <input
-                type="file"
-                class="prov-conf-file-input"
-                data-provider="${escapeHtml(p.provider)}"
-                accept=".conf,.txt"
-                multiple
-                style="display:none"
-              />
-            </div>
-          </div>
-        </div>
+          <span class="provider-menu-chevron">›</span>
+        </button>
       `;
     })
     .join("");
 
+  // Right Column: Selected Provider Detail Card (Parameters & Action Buttons)
+  let detailPaneHtml = "";
+  if (activeProviderView) {
+    const p = activeProviderView;
+    const meta = metaByProvider[p.provider];
+    const serverCountText = pp.serversAvailable.replace("{count}", String(p.serverCount));
+
+    detailPaneHtml = `
+      <div class="surf-card provider-card provider-detail-card ${p.isReady ? "is-ready" : ""}" data-provider="${escapeHtml(p.provider)}">
+        <div class="provider-card-header">
+          <div class="provider-brand-row">
+            <div class="provider-logo-badge ${meta.badgeClass}">${escapeHtml(meta.badgeText)}</div>
+            <div>
+              <div class="slot-name">${escapeHtml(p.displayName)}</div>
+              <div class="subtext-sm" style="display:flex; align-items:center; gap:6px; margin-top:3px; flex-wrap:wrap;">
+                <span class="badge ${p.hasPrivateKey ? "badge-running" : "badge-stopped"}">
+                  ${escapeHtml(p.hasPrivateKey ? pp.statusReady : pp.statusMissingKey)}
+                </span>
+                <span class="badge badge-os mono">${escapeHtml(serverCountText)}</span>
+              </div>
+            </div>
+          </div>
+          <button type="button" class="btn btn-sm btn-secondary btn-browse-provider" data-provider="${escapeHtml(p.provider)}">
+            ${escapeHtml(pp.browseServersBtn)}
+          </button>
+        </div>
+
+        <div class="subtext">${escapeHtml(meta.desc)}</div>
+
+        ${
+          meta.supportsToken
+            ? `
+          <div class="form-group">
+            <label>${escapeHtml(pp.apiTokenLabel)}</label>
+            <input
+              type="password"
+              class="text-input mono prov-token-input"
+              data-provider="${escapeHtml(p.provider)}"
+              placeholder="${escapeHtml(p.hasApiToken ? p.apiTokenMasked : pp.apiTokenPlaceholder)}"
+            />
+          </div>
+        `
+            : ""
+        }
+
+        <div class="form-group">
+          <label>${escapeHtml(pp.privateKeyLabel)}</label>
+          <input
+            type="password"
+            class="text-input mono prov-key-input"
+            data-provider="${escapeHtml(p.provider)}"
+            placeholder="${escapeHtml(p.hasPrivateKey ? p.privateKeyMasked : pp.privateKeyPlaceholder)}"
+          />
+        </div>
+
+        <div class="provider-form-grid">
+          <div class="form-group">
+            <label>${escapeHtml(pp.addressLabel)}</label>
+            <input
+              type="text"
+              class="text-input mono prov-addr-input"
+              data-provider="${escapeHtml(p.provider)}"
+              value="${escapeHtml(p.address)}"
+            />
+          </div>
+          <div class="form-group">
+            <label>${escapeHtml(pp.dnsLabel)}</label>
+            <input
+              type="text"
+              class="text-input mono prov-dns-input"
+              data-provider="${escapeHtml(p.provider)}"
+              value="${escapeHtml(p.dns)}"
+            />
+          </div>
+        </div>
+
+        <div class="provider-actions-row">
+          <div class="btn-group-sm">
+            <button type="button" class="btn btn-sm btn-primary btn-save-provider" data-provider="${escapeHtml(p.provider)}">
+              ${escapeHtml(pp.saveProviderBtn)}
+            </button>
+            ${
+              meta.supportsApiSync
+                ? `<button type="button" class="btn btn-sm btn-secondary btn-sync-provider" data-provider="${escapeHtml(p.provider)}">
+                     ${escapeHtml(pp.syncCatalogBtn)}
+                   </button>`
+                : ""
+            }
+          </div>
+          <div>
+            <button type="button" class="btn btn-sm btn-secondary btn-import-provider-conf" data-provider="${escapeHtml(p.provider)}">
+              ${escapeHtml(pp.importConfFilesBtn)}
+            </button>
+            <input
+              type="file"
+              class="prov-conf-file-input"
+              data-provider="${escapeHtml(p.provider)}"
+              accept=".conf,.txt"
+              multiple
+              style="display:none"
+            />
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   return `
     <div class="settings-view">
       <div class="settings-header-banner">
-        <h2 class="section-title">${escapeHtml(pp.title)}</h2>
+        <h2 class="section-title" style="margin-bottom:4px;">${escapeHtml(pp.title)}</h2>
         <div class="subtext">${escapeHtml(pp.subtitle)}</div>
       </div>
 
-      <div class="providers-grid">
-        ${providerCardsHtml}
+      <div class="providers-master-detail">
+        <div class="providers-menu-col" role="tablist" aria-label="VPN Providers">
+          ${providerMenuItemsHtml}
+        </div>
+        <div class="providers-detail-col">
+          ${detailPaneHtml}
+        </div>
       </div>
     </div>
   `;
@@ -3721,7 +3763,17 @@ function attachEventListeners(): void {
     });
   }
 
-  // Providers tab actions
+  // Providers tab actions (Master-Detail menu item click + detail card actions)
+  document.querySelectorAll<HTMLButtonElement>(".provider-menu-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const prov = btn.getAttribute("data-select-provider") as VpnProvider | null;
+      if (prov) {
+        selectedProviderTab = prov;
+        render();
+      }
+    });
+  });
+
   document.querySelectorAll<HTMLButtonElement>(".btn-browse-provider").forEach((btn) => {
     btn.addEventListener("click", () => {
       const prov = btn.getAttribute("data-provider") as VpnProvider | null;

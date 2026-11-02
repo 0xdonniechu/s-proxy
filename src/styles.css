@@ -1320,20 +1320,111 @@ table.data-table tr:last-child td {
   color: var(--text-primary);
 }
 
-/* 12. View 6: Multi-Provider VPN Hub */
-.providers-grid {
+/* 12. View 6: Multi-Provider VPN Hub (Master-Detail Two-Column Menu) */
+.providers-master-detail {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.providers-menu-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background-color: var(--card-bg);
+  border-radius: 14px;
+  padding: 8px;
+}
+
+.provider-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1.5px solid transparent;
+  background-color: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  min-width: 0;
+}
+
+.provider-menu-item:hover {
+  background-color: #F3F5F8;
+}
+
+.provider-menu-item.active {
+  background-color: #EDF6F8;
+  border-color: rgba(22, 138, 158, 0.35);
+  box-shadow: 0 2px 6px rgba(22, 138, 158, 0.08);
+}
+
+.provider-menu-item .provider-logo-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 11.5px;
+}
+
+.provider-menu-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.provider-menu-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.provider-menu-badges {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.provider-menu-sub {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.provider-menu-chevron {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.provider-menu-item.active .provider-menu-chevron {
+  color: var(--teal);
+}
+
+.providers-detail-col {
+  min-width: 0;
 }
 
 .provider-card {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 14px;
-  padding: 22px 24px;
+  gap: 12px;
+  padding: 18px 20px;
   border: 1px solid transparent;
+  min-width: 0;
 }
 
 .provider-card.is-ready {
@@ -1344,7 +1435,8 @@ table.data-table tr:last-child td {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .provider-brand-row {
