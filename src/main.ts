@@ -2595,7 +2595,7 @@ function renderCatalogTab(snap: HubSnapshot): string {
     )
     .join("");
 
-  const renderLocationCard = (loc: SurfsharkLocation): string => {
+  const renderLocationRow = (loc: SurfsharkLocation, customSubNote?: string): string => {
     const loadClass = loc.load > 70 ? "load-high" : loc.load > 40 ? "load-med" : "load-low";
     const provShort = loc.provider.toUpperCase();
     const isCustomLoc = loc.region === "Custom";
@@ -2604,6 +2604,10 @@ function renderCatalogTab(snap: HubSnapshot): string {
       loc.locationType === "static"
         ? `<span class="badge badge-os mono" style="font-size:10px;padding:1px 6px;">Static IP</span>`
         : "";
+    const subLine = customSubNote
+      ? `${escapeHtml(customSubNote)} &bull; [${escapeHtml(provShort)}] ${escapeHtml(loc.connectionName)}`
+      : `[${escapeHtml(provShort)}] ${escapeHtml(loc.connectionName)} &bull; ${escapeHtml(tzMeta.tzBadge)}`;
+
     return `
       <div class="loc-row-item">
         <div class="loc-row-left">
@@ -2612,7 +2616,7 @@ function renderCatalogTab(snap: HubSnapshot): string {
           </div>
           <div class="loc-info-col">
             <div class="loc-country">${escapeHtml(loc.country)} &bull; <strong>${escapeHtml(loc.location)}</strong> ${typeBadge}</div>
-            <div class="loc-city mono">[${escapeHtml(provShort)}] ${escapeHtml(loc.connectionName)} &bull; ${escapeHtml(tzMeta.tzBadge)}</div>
+            <div class="loc-city mono">${subLine}</div>
           </div>
         </div>
         <div class="loc-row-right">
@@ -2662,7 +2666,7 @@ function renderCatalogTab(snap: HubSnapshot): string {
           </div>
           <div class="subtext-sm" style="margin-bottom: 8px;">💡 ${escapeHtml(group.meta.safeNeighborsNote)}</div>
           <div class="surf-card locations-list-card">
-            ${group.locs.map(renderLocationCard).join("")}
+            ${group.locs.map((loc) => renderLocationRow(loc)).join("")}
           </div>
         </div>
       `;
@@ -2739,41 +2743,14 @@ function renderCatalogTab(snap: HubSnapshot): string {
           ${
             primaryRecLoc
               ? `
-            <div class="recommended-section" style="margin:0;">
-              <div class="section-title-sm">${escapeHtml(strings.catalog.recommendedTitle)}</div>
-              <div class="surf-card rec-split-card">
-                <div class="rec-split-col">
-                  <div class="rec-col-top">
-                    <div class="dark-icon-badge">⚡</div>
-                    <span class="rec-load-badge">${primaryRecLoc.load}% load</span>
-                  </div>
-                  <div class="rec-col-info">
-                    <div class="rec-col-location">${renderFlagBadge(primaryRecLoc.countryCode)} <span>${escapeHtml(primaryRecLoc.country)} &bull; ${escapeHtml(primaryRecLoc.location)}</span></div>
-                    <div class="rec-col-sub">${escapeHtml(primaryRecTitle)}</div>
-                  </div>
-                  <button type="button" class="btn btn-primary btn-sm btn-create-location-slot" data-loc-id="${escapeHtml(primaryRecLoc.id)}" data-loc-label="${escapeHtml(`${primaryRecLoc.countryCode} • ${primaryRecLoc.country} - ${primaryRecLoc.location}`)}">
-                    ${escapeHtml(strings.catalog.createAndStart)}
-                  </button>
-                </div>
-                ${
-                  backupRecLoc
-                    ? `
-                  <div class="rec-split-col">
-                    <div class="rec-col-top">
-                      <div class="dark-icon-badge">📍</div>
-                      <span class="rec-load-badge">${backupRecLoc.load}% load</span>
-                    </div>
-                    <div class="rec-col-info">
-                      <div class="rec-col-location">${renderFlagBadge(backupRecLoc.countryCode)} <span>${escapeHtml(backupRecLoc.country)} &bull; ${escapeHtml(backupRecLoc.location)}</span></div>
-                      <div class="rec-col-sub">${escapeHtml(backupRecTitle)}</div>
-                    </div>
-                    <button type="button" class="btn btn-secondary btn-sm btn-create-location-slot" data-loc-id="${escapeHtml(backupRecLoc.id)}" data-loc-label="${escapeHtml(`${backupRecLoc.countryCode} • ${backupRecLoc.country} - ${backupRecLoc.location}`)}">
-                      ${escapeHtml(strings.catalog.createAndStart)}
-                    </button>
-                  </div>
-                `
-                    : ""
-                }
+            <div class="locations-section" style="margin-bottom: 4px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">
+                <div class="section-title-sm" style="margin-bottom:0;">⚡ ${escapeHtml(strings.catalog.recommendedTitle)}</div>
+                <span class="badge badge-safe mono">${escapeHtml(backupRecLoc ? (isVi ? "2 đề xuất tối ưu" : "2 top picks") : (isVi ? "1 đề xuất tối ưu" : "1 top pick"))}</span>
+              </div>
+              <div class="surf-card locations-list-card">
+                ${renderLocationRow(primaryRecLoc, `★ ${primaryRecTitle}`)}
+                ${backupRecLoc ? renderLocationRow(backupRecLoc, `🛡 ${backupRecTitle}`) : ""}
               </div>
             </div>
             `
